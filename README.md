@@ -1,2 +1,2 @@
 # HarmTok
-Harmonization methods for harmony.
+Tokenization methods for harmony.
