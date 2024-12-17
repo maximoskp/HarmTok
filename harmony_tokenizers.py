@@ -51,8 +51,8 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
         }
         # positions
         current_token_id = 6
-        # up to 8/4 time signatures
-        for quart in range(8):
+        # up to 10/4 time signatures
+        for quart in range(10):
             for sixteenth in ['0', '5']:
                 self.vocab['position_' + str(quart) + 'x' + sixteenth] = current_token_id
                 current_token_id += 1
@@ -158,8 +158,8 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
         }
         # positions
         current_token_id = 6
-        # up to 8/4 time signatures
-        for quart in range(8):
+        # up to 10/4 time signatures
+        for quart in range(10):
             for sixteenth in ['0', '5']:
                 self.vocab['position_' + str(quart) + 'x' + sixteenth] = current_token_id
                 current_token_id += 1
@@ -268,8 +268,8 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
         }
         # positions
         current_token_id = 7
-        # up to 8/4 time signatures
-        for quart in range(8):
+        # up to 10/4 time signatures
+        for quart in range(10):
             for sixteenth in ['0', '5']:
                 self.vocab['position_' + str(quart) + 'x' + sixteenth] = current_token_id
                 current_token_id += 1
@@ -371,8 +371,8 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
         }
         # positions
         current_token_id = 7
-        # up to 8/4 time signatures
-        for quart in range(8):
+        # up to 10/4 time signatures
+        for quart in range(10):
             for sixteenth in ['0', '5']:
                 self.vocab['position_' + str(quart) + 'x' + sixteenth] = current_token_id
                 current_token_id += 1
@@ -482,8 +482,8 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
         }
         # positions
         current_token_id = 7
-        # up to 8/4 time signatures
-        for quart in range(8):
+        # up to 10/4 time signatures
+        for quart in range(10):
             for sixteenth in ['0', '5']:
                 self.vocab['position_' + str(quart) + 'x' + sixteenth] = current_token_id
                 current_token_id += 1
@@ -593,8 +593,8 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
         }
         # positions
         current_token_id = 7
-        # up to 8/4 time signatures
-        for quart in range(8):
+        # up to 10/4 time signatures
+        for quart in range(10):
             for sixteenth in ['0', '5']:
                 self.vocab['position_' + str(quart) + 'x' + sixteenth] = current_token_id
                 current_token_id += 1
@@ -705,8 +705,8 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
         }
         # positions
         current_token_id = 7
-        # up to 8/4 time signatures
-        for quart in range(8):
+        # up to 10/4 time signatures
+        for quart in range(10):
             for sixteenth in ['0', '5']:
                 self.vocab['position_' + str(quart) + 'x' + sixteenth] = current_token_id
                 current_token_id += 1
