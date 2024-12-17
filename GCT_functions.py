@@ -282,7 +282,7 @@ def HARM_shift_good_intervals(g):
     return g
 # end HARM_shift_good_intervals
 
-def get_singe_GCT_of_chord(c, k=0, m=np.array([0,2,4,5,7,9,11])):
+def get_singe_GCT_of_chord(c, k=0, m=np.array([0,2,4,5,7,9,11]), logging=False):
     all_gcts, rtx_form = HARM_consonanceChordRecognizer(c)
     # fix roots in key
     for i in range( len(all_gcts) ):
@@ -297,7 +297,7 @@ def get_singe_GCT_of_chord(c, k=0, m=np.array([0,2,4,5,7,9,11])):
     if len(all_gcts) > 1:
         rtx_form, all_gcts = HARM_closed_position(rtx_form, all_gcts)
     # if still more than one, write it down
-    if len(all_gcts) > 1:
+    if len(all_gcts) > 1 and logging:
         with open("GCT_logging.txt", "a") as myfile:
             myfile.write("chord: "+str(c)+'\n')
             myfile.write("gcts found: "+'\n')
@@ -325,11 +325,11 @@ def get_singe_GCT_of_chord(c, k=0, m=np.array([0,2,4,5,7,9,11])):
     return final_gct
 # end get_singe_GCT_of_chord
 
-def get_singe_GCT_of_m21chord(c, k=0, m=np.array([0,2,4,5,7,9,11])):
+def get_singe_GCT_of_m21chord(c, k=0, m=np.array([0,2,4,5,7,9,11]), logging=False):
     # get pitches of chord structure
     a = []
     for p in c.pitches:
         a.append( p.midi )
     # run function above
-    final_gct = get_singe_GCT_of_chord(a, k, m)
+    final_gct = get_singe_GCT_of_chord(a, k, m, logging=logging)
     return final_gct
