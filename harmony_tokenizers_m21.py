@@ -1,7 +1,15 @@
 from tqdm import tqdm 
 from transformers import PreTrainedTokenizerBase
-from music21 import converter, harmony, pitch, note
+from music21 import converter, harmony, pitch, note, interval
+import mir_eval
+from copy import deepcopy
+import numpy as np
 
+MIR_QUALITIES = mir_eval.chord.QUALITIES
+EXT_MIR_QUALITIES = deepcopy( MIR_QUALITIES )
+for k in list(MIR_QUALITIES.keys()) + ['7(b9)', '7(#9)', '7(#11)', '7(b13)']:
+    _, semitone_bitmap, _ = mir_eval.chord.encode( 'C' + (len(k) > 0)*':' + k, reduce_extended_chords=True )
+    EXT_MIR_QUALITIES[k] = semitone_bitmap
 
 class ChordSymbolTokenizer(PreTrainedTokenizerBase):
     def __init__(self):
@@ -44,11 +52,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
                 pitch_obj = pitch_obj.getEnharmonic()  # Convert to sharp
             chromatic_roots.append(pitch_obj.name)  # Use sharp representation
 
-        qualities = [
-            'maj', 'min', 'aug', 'dim', 'sus4', 'sus2', '7', 'maj7', 'min7', 'minmaj7',
-            'maj6', 'min6', '6', 'dim7', 'hdim7', 'maj9', 'min9', '9', 'min11', '11', 'maj13',
-            'min13', '13', '1', '5'#, ''
-        ]
+        qualities = list(EXT_MIR_QUALITIES.keys())
 
         for root in chromatic_roots:
             for quality in qualities:
@@ -75,11 +79,15 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
         """
         # Custom mapping for cases like "D-" → "C#"
         special_mapping = {
+            'C-': 'B',
             'D-': 'C#',
             'E-': 'D#',
+            'F-': 'E',
+            'E#': 'F',
             'G-': 'F#',
             'A-': 'G#',
             'B-': 'A#',
+            'B#': 'C'
         }
 
         # Check if the root matches a special case
@@ -90,6 +98,22 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
         pitch_obj = pitch.Pitch(root)
         return pitch_obj.name  # Always return the sharp representation
 
+    def get_closest_mir_eval_symbol(self, chord_symbol):
+        # get binary type representation
+        # transpose to c major
+        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
+        tc = chord_symbol.transpose(ti)
+        # make binary
+        b = np.zeros(12)
+        b[tc.pitchClasses] = 1
+        similarity_max = -1
+        key_max = 'unk'
+        for k in EXT_MIR_QUALITIES.keys():
+            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
+            if similarity_max < tmp_similarity:
+                similarity_max = tmp_similarity
+                key_max = k
+        return key_max
 
     def normalize_chord_symbol(self, chord_symbol):
         """
@@ -97,56 +121,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
         """
         # Normalize root to sharp notation
         root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
-
-        # Handle 'sus' chords explicitly
-        if 'sus' in chord_symbol.figure:
-            # Get intervals of the chord
-            intervals = [
-                (p.midi - chord_symbol.root().midi) % 12 for p in chord_symbol.pitches
-            ]
-
-            # Check for sus2 (M2 interval) or sus4 (P4 interval)
-            if 2 in intervals:
-                quality = 'sus2'
-            elif 5 in intervals:
-                quality = 'sus4'
-            else:
-                quality = 'sus4'  # Default to 'sus4' if unclear
-        else:
-            # Mapping of music21 qualities to predefined chord qualities
-            type_mapping = [
-                ('maj7', 'maj7'),
-                #('min7', 'min7'),
-                ('m7', 'min7'),
-                ('7', '7'),
-                ('dim7', 'dim7'),
-                ('hdim7', 'hdim7'),
-                ('minmaj7', 'minmaj7'),
-                ('maj6', 'maj6'),
-                ('m6', 'min6'),
-                ('6', '6'),
-                ('maj9', 'maj9'),
-                ('M9', 'maj9'),
-                ('m9', 'min9'),
-                ('power', '5'),
-                ('9', '9'),
-                ('11', '11'),
-                ('maj13', 'maj13'),
-                ('m13', 'min13'),
-                ('13', '13'),
-                ('dim', 'dim'),
-                ('aug', 'aug'),
-                ('m', 'min'),
-                ('', 'maj')  # Default to major
-            ]
-
-            # Match figure with type mapping
-            for keyword, normalized_type in type_mapping:
-                if keyword in chord_symbol.figure:
-                    quality = normalized_type
-                    break
-            else:
-                quality = 'unk'  # unknown
+        quality = self.get_closest_mir_eval_symbol( chord_symbol )
 
         # Return the normalized chord symbol
         return f"{root}:{quality}"
