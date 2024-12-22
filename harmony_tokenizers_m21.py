@@ -1,5 +1,6 @@
+# https://huggingface.co/docs/transformers/v4.47.1/en/internal/tokenization_utils#transformers.PreTrainedTokenizer
 from tqdm import tqdm 
-from transformers import PreTrainedTokenizerBase
+from transformers import PreTrainedTokenizer
 from music21 import converter, harmony, pitch, note, interval
 import mir_eval
 from copy import deepcopy
@@ -27,23 +28,39 @@ for k in list(MIR_QUALITIES.keys()) + ['7(b9)', '7(#9)', '7(#11)', '7(b13)']:
     _, semitone_bitmap, _ = mir_eval.chord.encode( 'C' + (len(k) > 0)*':' + k, reduce_extended_chords=True )
     EXT_MIR_QUALITIES[k] = semitone_bitmap
 
-class MergedMelHarmTokenizer(PreTrainedTokenizerBase):
+class MergedMelHarmTokenizer(PreTrainedTokenizer):
     def __init__(self, mel_tokenizer, harm_tokenizer, verbose=0):
         self.mel_tokenizer = mel_tokenizer
         self.harm_tokenizer = harm_tokenizer
         self.verbose = verbose
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
-        self.empty_chord = 'emp'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
         # merge vocabularies - start with mel_tokinzer
         self.vocab = mel_tokenizer.vocab
         # add harm_tokenizer on top of that
         if self.verbose > 0:
             print('Merging harmony vocab')
         self.merge_dict_to_vocab( harm_tokenizer.vocab )
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def merge_dict_to_vocab(self, d):
         for k in d.keys():
@@ -64,7 +81,7 @@ class MergedMelHarmTokenizer(PreTrainedTokenizerBase):
         if self.verbose > 0:
             print('Merging harmony vocab')
         self.merge_dict_to_vocab(self.harm_tokenizer.vocab)
-        pass
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
 
     def transform(self, corpus):
@@ -94,22 +111,26 @@ class MergedMelHarmTokenizer(PreTrainedTokenizerBase):
     # end __call__
 # end class MergedMelHarmTokenizer
 
-class ChordSymbolTokenizer(PreTrainedTokenizerBase):
+class ChordSymbolTokenizer(PreTrainedTokenizer):
     def __init__(self):
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
-        self.empty_chord = 'emp'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
-            'unk': 0,
-            'pad': 1,
-            'bos': 2,
-            'eos': 3,
-            'emp': 4,
-            'bar': 5
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<emp>': 4,
+            '<mask>': 5,
+            '<bar>': 6
         }
-        current_token_id = 6
+        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -143,7 +164,20 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
                     #print(chord_token)
                     self.vocab[chord_token] = current_token_id
                     current_token_id += 1
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
@@ -191,7 +225,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
         b = np.zeros(12)
         b[tc.pitchClasses] = 1
         similarity_max = -1
-        key_max = 'unk'
+        key_max = '<unk>'
         for k in EXT_MIR_QUALITIES.keys():
             tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
             if similarity_max < tmp_similarity:
@@ -215,7 +249,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
         ids = []
 
         for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track 'unk' tokens for the current file
+            unk_count = 0  # Counter to track '<unk>' tokens for the current file
             score = converter.parse(file_path)
             part = score.parts[0]  # Assume lead sheet
             measures = list(part.getElementsByClass('Measure'))
@@ -230,8 +264,8 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
-                harmony_tokens.append('bar')
-                harmony_ids.append(self.vocab['bar'])
+                harmony_tokens.append('<bar>')
+                harmony_ids.append(self.vocab['<bar>'])
 
                 # Get all chord symbols within the current measure
                 chords_in_measure = [
@@ -258,13 +292,13 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
                         harmony_ids.append(self.vocab[chord_token])
                     else:
                         # Handle unknown chords
-                        harmony_tokens.append('unk')
-                        harmony_ids.append(self.vocab['unk'])
+                        harmony_tokens.append('<unk>')
+                        harmony_ids.append(self.vocab['<unk>'])
                         unk_count += 1  
 
             # Print a message if unknown tokens were generated for the current file
             if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} 'unk' tokens.")
+                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
             tokens.append(harmony_tokens)
             ids.append(harmony_ids)
@@ -282,22 +316,26 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
     # end __call__
 # end class ChordSymbolTokenizer
 
-class RootTypeTokenizer(PreTrainedTokenizerBase):
+class RootTypeTokenizer(PreTrainedTokenizer):
     def __init__(self):
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
-        self.empty_chord = 'emp'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
-            'unk': 0,
-            'pad': 1,
-            'bos': 2,
-            'eos': 3,
-            'emp': 4,
-            'bar': 5
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<emp>': 4,
+            '<mask>': 5,
+            '<bar>': 6
         }
-        current_token_id = 6
+        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -333,7 +371,20 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
                 #print(chord_token)
                 self.vocab[quality_token] = current_token_id
                 current_token_id += 1
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
@@ -381,7 +432,7 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
         b = np.zeros(12)
         b[tc.pitchClasses] = 1
         similarity_max = -1
-        key_max = 'unk'
+        key_max = '<unk>'
         for k in EXT_MIR_QUALITIES.keys():
             tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
             if similarity_max < tmp_similarity:
@@ -405,7 +456,7 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
         ids = []
 
         for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track 'unk' tokens for the current file
+            unk_count = 0  # Counter to track '<unk>' tokens for the current file
             score = converter.parse(file_path)
             part = score.parts[0]  # Assume lead sheet
             measures = list(part.getElementsByClass('Measure'))
@@ -420,8 +471,8 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
-                harmony_tokens.append('bar')
-                harmony_ids.append(self.vocab['bar'])
+                harmony_tokens.append('<bar>')
+                harmony_ids.append(self.vocab['<bar>'])
 
                 # Get all chord symbols within the current measure
                 chords_in_measure = [
@@ -448,21 +499,21 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
                         harmony_ids.append(self.vocab[root_token])
                     else:
                         # Handle unknown chords
-                        harmony_tokens.append('unk')
-                        harmony_ids.append(self.vocab['unk'])
+                        harmony_tokens.append('<unk>')
+                        harmony_ids.append(self.vocab['<unk>'])
                         unk_count += 1
                     if type_token in self.vocab:
                         harmony_tokens.append(type_token)
                         harmony_ids.append(self.vocab[type_token])
                     else:
                         # Handle unknown chords
-                        harmony_tokens.append('unk')
-                        harmony_ids.append(self.vocab['unk'])
+                        harmony_tokens.append('<unk>')
+                        harmony_ids.append(self.vocab['<unk>'])
                         unk_count += 1  
 
             # Print a message if unknown tokens were generated for the current file
             if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} 'unk' tokens.")
+                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
             tokens.append(harmony_tokens)
             ids.append(harmony_ids)
@@ -480,22 +531,26 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
     # end __call__
 # end class RootTypeTokenizer
 
-class PitchClassTokenizer(PreTrainedTokenizerBase):
+class PitchClassTokenizer(PreTrainedTokenizer):
     def __init__(self):
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
-        self.empty_chord = 'emp'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
-            'unk': 0,
-            'pad': 1,
-            'bos': 2,
-            'eos': 3,
-            'emp': 4,
-            'bar': 5
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<emp>': 4,
+            '<mask>': 5,
+            '<bar>': 6
         }
-        current_token_id = 6
+        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -516,7 +571,20 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
         for pc in range(12):
             self.vocab['chord_pc_' + str(pc)] = current_token_id
             current_token_id += 1
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
@@ -564,7 +632,7 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
         b = np.zeros(12)
         b[tc.pitchClasses] = 1
         similarity_max = -1
-        key_max = 'unk'
+        key_max = '<unk>'
         for k in EXT_MIR_QUALITIES.keys():
             tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
             if similarity_max < tmp_similarity:
@@ -588,7 +656,7 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
         ids = []
 
         for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track 'unk' tokens for the current file
+            unk_count = 0  # Counter to track '<unk>' tokens for the current file
             score = converter.parse(file_path)
             part = score.parts[0]  # Assume lead sheet
             measures = list(part.getElementsByClass('Measure'))
@@ -603,8 +671,8 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
-                harmony_tokens.append('bar')
-                harmony_ids.append(self.vocab['bar'])
+                harmony_tokens.append('<bar>')
+                harmony_ids.append(self.vocab['<bar>'])
 
                 # Get all chord symbols within the current measure
                 chords_in_measure = [
@@ -635,13 +703,13 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
                             harmony_ids.append(self.vocab[ tmp_token ])
                     else:
                         # Handle unknown chords
-                        harmony_tokens.append('unk')
-                        harmony_ids.append(self.vocab['unk'])
+                        harmony_tokens.append('<unk>')
+                        harmony_ids.append(self.vocab['<unk>'])
                         unk_count += 1
 
             # Print a message if unknown tokens were generated for the current file
             if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} 'unk' tokens.")
+                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
             tokens.append(harmony_tokens)
             ids.append(harmony_ids)
@@ -659,22 +727,26 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
     # end __call__
 # end class PitchClassTokenizer
 
-class RootPCTokenizer(PreTrainedTokenizerBase):
+class RootPCTokenizer(PreTrainedTokenizer):
     def __init__(self):
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
-        self.empty_chord = 'emp'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
-            'unk': 0,
-            'pad': 1,
-            'bos': 2,
-            'eos': 3,
-            'emp': 4,
-            'bar': 5
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<emp>': 4,
+            '<mask>': 5,
+            '<bar>': 6
         }
-        current_token_id = 6
+        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -698,12 +770,24 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
         for pc in range(12):
             self.vocab['chord_pc_' + str(pc)] = current_token_id
             current_token_id += 1
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
     # end fit
-
 
     def find_closest_quantized_time(self, offset):
         # Find the closest predefined quantized time
@@ -746,7 +830,7 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
         b = np.zeros(12)
         b[tc.pitchClasses] = 1
         similarity_max = -1
-        key_max = 'unk'
+        key_max = '<unk>'
         for k in EXT_MIR_QUALITIES.keys():
             tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
             if similarity_max < tmp_similarity:
@@ -770,7 +854,7 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
         ids = []
 
         for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track 'unk' tokens for the current file
+            unk_count = 0  # Counter to track '<unk>' tokens for the current file
             score = converter.parse(file_path)
             part = score.parts[0]  # Assume lead sheet
             measures = list(part.getElementsByClass('Measure'))
@@ -785,8 +869,8 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
-                harmony_tokens.append('bar')
-                harmony_ids.append(self.vocab['bar'])
+                harmony_tokens.append('<bar>')
+                harmony_ids.append(self.vocab['<bar>'])
 
                 # Get all chord symbols within the current measure
                 chords_in_measure = [
@@ -821,13 +905,13 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
                                 harmony_ids.append(self.vocab[ tmp_token ])
                     else:
                         # Handle unknown chords
-                        harmony_tokens.append('unk')
-                        harmony_ids.append(self.vocab['unk'])
+                        harmony_tokens.append('<unk>')
+                        harmony_ids.append(self.vocab['<unk>'])
                         unk_count += 1
 
             # Print a message if unknown tokens were generated for the current file
             if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} 'unk' tokens.")
+                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
             tokens.append(harmony_tokens)
             ids.append(harmony_ids)
@@ -845,22 +929,26 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
     # end __call__
 # end class RootPCTokenizer
 
-class GCTRootPCTokenizer(PreTrainedTokenizerBase):
+class GCTRootPCTokenizer(PreTrainedTokenizer):
     def __init__(self):
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
-        self.empty_chord = 'emp'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
-            'unk': 0,
-            'pad': 1,
-            'bos': 2,
-            'eos': 3,
-            'emp': 4,
-            'bar': 5
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<emp>': 4,
+            '<mask>': 5,
+            '<bar>': 6
         }
-        current_token_id = 6
+        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -884,12 +972,24 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
         for pc in range(12):
             self.vocab['chord_pc_' + str(pc)] = current_token_id
             current_token_id += 1
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
     # end fit
-
 
     def find_closest_quantized_time(self, offset):
         # Find the closest predefined quantized time
@@ -932,7 +1032,7 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
         b = np.zeros(12)
         b[tc.pitchClasses] = 1
         similarity_max = -1
-        key_max = 'unk'
+        key_max = '<unk>'
         for k in EXT_MIR_QUALITIES.keys():
             tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
             if similarity_max < tmp_similarity:
@@ -956,7 +1056,7 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
         ids = []
 
         for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track 'unk' tokens for the current file
+            unk_count = 0  # Counter to track '<unk>' tokens for the current file
             score = converter.parse(file_path)
             part = score.parts[0]  # Assume lead sheet
             measures = list(part.getElementsByClass('Measure'))
@@ -971,8 +1071,8 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
-                harmony_tokens.append('bar')
-                harmony_ids.append(self.vocab['bar'])
+                harmony_tokens.append('<bar>')
+                harmony_ids.append(self.vocab['<bar>'])
 
                 # Get all chord symbols within the current measure
                 chords_in_measure = [
@@ -1010,13 +1110,13 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
                             harmony_ids.append(self.vocab[ tmp_token ])
                     else:
                         # Handle unknown chords
-                        harmony_tokens.append('unk')
-                        harmony_ids.append(self.vocab['unk'])
+                        harmony_tokens.append('<unk>')
+                        harmony_ids.append(self.vocab['<unk>'])
                         unk_count += 1
 
             # Print a message if unknown tokens were generated for the current file
             if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} 'unk' tokens.")
+                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
             tokens.append(harmony_tokens)
             ids.append(harmony_ids)
@@ -1034,22 +1134,26 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
     # end __call__
 # end class GCTRootPCTokenizer
 
-class GCTSymbolTokenizer(PreTrainedTokenizerBase):
+class GCTSymbolTokenizer(PreTrainedTokenizer):
     def __init__(self):
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
-        self.empty_chord = 'emp'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
-            'unk': 0,
-            'pad': 1,
-            'bos': 2,
-            'eos': 3,
-            'emp': 4,
-            'bar': 5
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<emp>': 4,
+            '<mask>': 5,
+            '<bar>': 6
         }
-        current_token_id = 6
+        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -1066,6 +1170,18 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
                 self.vocab[time_token] = current_token_id
                 current_token_id += 1
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         for file_path in tqdm(corpus, desc="Processing Files"):
@@ -1100,6 +1216,7 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
                         tmp_token = str(g)
                         if tmp_token not in self.vocab.keys():
                             self.vocab[tmp_token] = len(self.vocab)
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
 
 
@@ -1144,7 +1261,7 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
         b = np.zeros(12)
         b[tc.pitchClasses] = 1
         similarity_max = -1
-        key_max = 'unk'
+        key_max = '<unk>'
         for k in EXT_MIR_QUALITIES.keys():
             tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
             if similarity_max < tmp_similarity:
@@ -1168,7 +1285,7 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
         ids = []
 
         for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track 'unk' tokens for the current file
+            unk_count = 0  # Counter to track '<unk>' tokens for the current file
             score = converter.parse(file_path)
             part = score.parts[0]  # Assume lead sheet
             measures = list(part.getElementsByClass('Measure'))
@@ -1183,8 +1300,8 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
-                harmony_tokens.append('bar')
-                harmony_ids.append(self.vocab['bar'])
+                harmony_tokens.append('<bar>')
+                harmony_ids.append(self.vocab['<bar>'])
 
                 # Get all chord symbols within the current measure
                 chords_in_measure = [
@@ -1213,18 +1330,18 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
                         g = gct( pcs )
                         tmp_token = str(g)
                         if tmp_token not in self.vocab.keys():
-                            tmp_token = 'unk'
+                            tmp_token = '<unk>'
                         harmony_tokens.append( tmp_token )
                         harmony_ids.append(self.vocab[ tmp_token ])
                     else:
                         # Handle unknown chords
-                        harmony_tokens.append('unk')
-                        harmony_ids.append(self.vocab['unk'])
+                        harmony_tokens.append('<unk>')
+                        harmony_ids.append(self.vocab['<unk>'])
                         unk_count += 1
 
             # Print a message if unknown tokens were generated for the current file
             if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} 'unk' tokens.")
+                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
             tokens.append(harmony_tokens)
             ids.append(harmony_ids)
@@ -1242,22 +1359,26 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
     # end __call__
 # end class GCTSymbolTokenizer
 
-class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
+class GCTRootTypeTokenizer(PreTrainedTokenizer):
     def __init__(self):
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
-        self.empty_chord = 'emp'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
-            'unk': 0,
-            'pad': 1,
-            'bos': 2,
-            'eos': 3,
-            'emp': 4,
-            'bar': 5
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<emp>': 4,
+            '<mask>': 5,
+            '<bar>': 6
         }
-        current_token_id = 6
+        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -1278,6 +1399,18 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
             self.vocab['chord_root_' + str(root)] = current_token_id
             current_token_id += 1
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         for file_path in tqdm(corpus, desc="Processing Files"):
@@ -1312,6 +1445,7 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
                         tmp_token = str(g[1:])
                         if tmp_token not in self.vocab.keys():
                             self.vocab[tmp_token] = len(self.vocab)
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
 
 
@@ -1356,7 +1490,7 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
         b = np.zeros(12)
         b[tc.pitchClasses] = 1
         similarity_max = -1
-        key_max = 'unk'
+        key_max = '<unk>'
         for k in EXT_MIR_QUALITIES.keys():
             tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
             if similarity_max < tmp_similarity:
@@ -1380,7 +1514,7 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
         ids = []
 
         for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track 'unk' tokens for the current file
+            unk_count = 0  # Counter to track '<unk>' tokens for the current file
             score = converter.parse(file_path)
             part = score.parts[0]  # Assume lead sheet
             measures = list(part.getElementsByClass('Measure'))
@@ -1395,8 +1529,8 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
-                harmony_tokens.append('bar')
-                harmony_ids.append(self.vocab['bar'])
+                harmony_tokens.append('<bar>')
+                harmony_ids.append(self.vocab['<bar>'])
 
                 # Get all chord symbols within the current measure
                 chords_in_measure = [
@@ -1430,18 +1564,18 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
                         # get gct type
                         tmp_token = str(g[1:])
                         if tmp_token not in self.vocab.keys():
-                            tmp_token = 'unk'
+                            tmp_token = '<unk>'
                         harmony_tokens.append( tmp_token )
                         harmony_ids.append(self.vocab[ tmp_token ])
                     else:
                         # Handle unknown chords
-                        harmony_tokens.append('unk')
-                        harmony_ids.append(self.vocab['unk'])
+                        harmony_tokens.append('<unk>')
+                        harmony_ids.append(self.vocab['<unk>'])
                         unk_count += 1
 
             # Print a message if unknown tokens were generated for the current file
             if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} 'unk' tokens.")
+                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
             tokens.append(harmony_tokens)
             ids.append(harmony_ids)
@@ -1459,27 +1593,28 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
     # end __call__
 # end class GCTRootTypeTokenizer
 
-class MelodyPitchTokenizer(PreTrainedTokenizerBase):
+class MelodyPitchTokenizer(PreTrainedTokenizer):
     def __init__(self, min_pitch=21, max_pitch=108):
         """
         Initialize the melody tokenizer with a configurable pitch range.
         """
-        self.unk_token = 'unk'
-        self.pad_token = 'pad'
-        self.bos_token = 'bos'
-        self.eos_token = 'eos'
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
         self.min_pitch = min_pitch  # Minimum MIDI pitch value (e.g., 21 for A0)
         self.max_pitch = max_pitch  # Maximum MIDI pitch value (e.g., 108 for C8)
         self.vocab = {
-            'unk': 0,
-            'pad': 1,
-            'bos': 2,
-            'eos': 3,
-            'Rest': 4, 
-            'bar': 5
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<rest>': 4,
+            '<mask>': 5,
+            '<bar>': 6
         }
+        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
-        current_token_id = 6
 
         # Predefine pitch tokens for the allowed range
         for midi_pitch in range(self.min_pitch, self.max_pitch + 1):
@@ -1500,7 +1635,20 @@ class MelodyPitchTokenizer(PreTrainedTokenizerBase):
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = current_token_id
                 current_token_id += 1
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
@@ -1522,7 +1670,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizerBase):
 
         # Use tqdm to show progress when processing files
         for file_path in tqdm(corpus, desc="Processing Melody Files"):
-            unk_count = 0  # Counter to track 'unk' tokens for the current file
+            unk_count = 0  # Counter to track '<unk>' tokens for the current file
             score = converter.parse(file_path)
             part = score.parts[0]  # Assume single melody line
             measures = list(part.getElementsByClass('Measure'))
@@ -1536,8 +1684,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizerBase):
 
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
-                melody_tokens.append('bar')
-                melody_ids.append(self.vocab['bar'])
+                melody_tokens.append('<bar>')
+                melody_ids.append(self.vocab['<bar>'])
 
                 # Get all valid events (notes/rests) within the current measure
                 events_in_measure = [
@@ -1548,8 +1696,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizerBase):
 
                 # If the measure is empty, add a "Rest" token and continue
                 if not events_in_measure:
-                    melody_tokens.append('Rest')
-                    melody_ids.append(self.vocab['Rest'])
+                    melody_tokens.append('<rest>')
+                    melody_ids.append(self.vocab['<rest>'])
                     continue
 
                 # Process each event in the current measure
@@ -1570,24 +1718,24 @@ class MelodyPitchTokenizer(PreTrainedTokenizerBase):
                             melody_tokens.append(pitch_token)
                             melody_ids.append(self.vocab[pitch_token])
                         else:
-                            # Out-of-range pitch is treated as 'unk'
-                            melody_tokens.append('unk')
-                            melody_ids.append(self.vocab['unk'])
+                            # Out-of-range pitch is treated as '<unk>'
+                            melody_tokens.append('<unk>')
+                            melody_ids.append(self.vocab['<unk>'])
                             unk_count += 1  
 
                     elif isinstance(e, note.Rest):
                         # Add rest token
-                        melody_tokens.append('Rest')
-                        melody_ids.append(self.vocab['Rest'])
+                        melody_tokens.append('<rest>')
+                        melody_ids.append(self.vocab['<rest>'])
                     else:
-                        # Unknown event type is treated as 'unk'
-                        melody_tokens.append('unk')
-                        melody_ids.append(self.vocab['unk'])
+                        # Unknown event type is treated as '<unk>'
+                        melody_tokens.append('<unk>')
+                        melody_ids.append(self.vocab['<unk>'])
                         unk_count += 1  
 
             # Print a message if unknown tokens were generated for the current file
             if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} 'unk' tokens.")
+                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
             tokens.append(melody_tokens)
             ids.append(melody_ids)
