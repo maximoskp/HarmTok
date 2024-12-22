@@ -27,6 +27,73 @@ for k in list(MIR_QUALITIES.keys()) + ['7(b9)', '7(#9)', '7(#11)', '7(b13)']:
     _, semitone_bitmap, _ = mir_eval.chord.encode( 'C' + (len(k) > 0)*':' + k, reduce_extended_chords=True )
     EXT_MIR_QUALITIES[k] = semitone_bitmap
 
+class MergedMelHarmTokenizer(PreTrainedTokenizerBase):
+    def __init__(self, mel_tokenizer, harm_tokenizer, verbose=0):
+        self.mel_tokenizer = mel_tokenizer
+        self.harm_tokenizer = harm_tokenizer
+        self.verbose = verbose
+        self.unk_token = 'unk'
+        self.pad_token = 'pad'
+        self.bos_token = 'bos'
+        self.eos_token = 'eos'
+        self.empty_chord = 'emp'
+        # merge vocabularies - start with mel_tokinzer
+        self.vocab = mel_tokenizer.vocab
+        # add harm_tokenizer on top of that
+        if self.verbose > 0:
+            print('Merging harmony vocab')
+        self.merge_dict_to_vocab( harm_tokenizer.vocab )
+    # end init
+
+    def merge_dict_to_vocab(self, d):
+        for k in d.keys():
+            if k not in self.vocab.keys():
+                self.vocab[k] = len(self.vocab)
+    # end merge_dict_to_vocab
+
+    def fit(self, corpus):
+        if self.verbose > 0:
+            print('Training melody tokenizer')
+        self.mel_tokenizer.fit(corpus)
+        if self.verbose > 0:
+            print('Merging melody vocab')
+        self.merge_dict_to_vocab(self.mel_tokenizer.vocab)
+        if self.verbose > 0:
+            print('Training harmony tokenizer')
+        self.harm_tokenizer.fit(corpus)
+        if self.verbose > 0:
+            print('Merging harmony vocab')
+        self.merge_dict_to_vocab(self.harm_tokenizer.vocab)
+        pass
+    # end fit
+
+    def transform(self, corpus):
+        # first put melody tokens
+        if self.verbose > 0:
+            print('Processing melody')
+        tmp_toks_ids = self.mel_tokenizer.transform(corpus)
+        tokens = tmp_toks_ids['tokens']
+        ids = tmp_toks_ids['ids']
+        # then concatenate harmony tokens
+        if self.verbose > 0:
+            print('Processing harmony')
+        tmp_toks_ids = self.harm_tokenizer.transform(corpus)
+        tokens.append(tmp_toks_ids['tokens'])
+        ids.append(tmp_toks_ids['ids'])
+        return {'tokens': tokens, 'ids': ids}
+    # end transform
+    
+
+    def fit_transform(self, corpus):
+        self.fit(corpus)
+        return self.transform(corpus)
+    # end fit_transform
+
+    def __call__(self, corpus):
+        return self.transform(corpus)
+    # end __call__
+# end class MergedMelHarmTokenizer
+
 class ChordSymbolTokenizer(PreTrainedTokenizerBase):
     def __init__(self):
         self.unk_token = 'unk'
@@ -76,6 +143,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
                     #print(chord_token)
                     self.vocab[chord_token] = current_token_id
                     current_token_id += 1
+    # end init
 
     def fit(self, corpus):
         pass
@@ -205,6 +273,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizerBase):
     
 
     def fit_transform(self, corpus):
+        self.fit(corpus)
         return self.transform(corpus)
     # end transform
 
@@ -264,6 +333,7 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
                 #print(chord_token)
                 self.vocab[quality_token] = current_token_id
                 current_token_id += 1
+    # end init
 
     def fit(self, corpus):
         pass
@@ -401,6 +471,7 @@ class RootTypeTokenizer(PreTrainedTokenizerBase):
     
 
     def fit_transform(self, corpus):
+        self.fit(corpus)
         return self.transform(corpus)
     # end transform
 
@@ -445,6 +516,7 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
         for pc in range(12):
             self.vocab['chord_pc_' + str(pc)] = current_token_id
             current_token_id += 1
+    # end init
 
     def fit(self, corpus):
         pass
@@ -578,6 +650,7 @@ class PitchClassTokenizer(PreTrainedTokenizerBase):
     
 
     def fit_transform(self, corpus):
+        self.fit(corpus)
         return self.transform(corpus)
     # end transform
 
@@ -625,6 +698,7 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
         for pc in range(12):
             self.vocab['chord_pc_' + str(pc)] = current_token_id
             current_token_id += 1
+    # end init
 
     def fit(self, corpus):
         pass
@@ -762,6 +836,7 @@ class RootPCTokenizer(PreTrainedTokenizerBase):
     
 
     def fit_transform(self, corpus):
+        self.fit(corpus)
         return self.transform(corpus)
     # end transform
 
@@ -809,6 +884,7 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
         for pc in range(12):
             self.vocab['chord_pc_' + str(pc)] = current_token_id
             current_token_id += 1
+    # end init
 
     def fit(self, corpus):
         pass
@@ -949,6 +1025,7 @@ class GCTRootPCTokenizer(PreTrainedTokenizerBase):
     
 
     def fit_transform(self, corpus):
+        self.fit(corpus)
         return self.transform(corpus)
     # end transform
 
@@ -988,6 +1065,7 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = current_token_id
                 current_token_id += 1
+    # end init
 
     def fit(self, corpus):
         for file_path in tqdm(corpus, desc="Processing Files"):
@@ -1155,6 +1233,7 @@ class GCTSymbolTokenizer(PreTrainedTokenizerBase):
     
 
     def fit_transform(self, corpus):
+        self.fit(corpus)
         return self.transform(corpus)
     # end transform
 
@@ -1371,6 +1450,7 @@ class GCTRootTypeTokenizer(PreTrainedTokenizerBase):
     
 
     def fit_transform(self, corpus):
+        self.fit(corpus)
         return self.transform(corpus)
     # end transform
 
@@ -1384,6 +1464,10 @@ class MelodyPitchTokenizer(PreTrainedTokenizerBase):
         """
         Initialize the melody tokenizer with a configurable pitch range.
         """
+        self.unk_token = 'unk'
+        self.pad_token = 'pad'
+        self.bos_token = 'bos'
+        self.eos_token = 'eos'
         self.min_pitch = min_pitch  # Minimum MIDI pitch value (e.g., 21 for A0)
         self.max_pitch = max_pitch  # Maximum MIDI pitch value (e.g., 108 for C8)
         self.vocab = {
@@ -1416,6 +1500,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizerBase):
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = current_token_id
                 current_token_id += 1
+    # end init
 
     def fit(self, corpus):
         pass
@@ -1511,6 +1596,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizerBase):
     
 
     def fit_transform(self, corpus):
+        self.fit(corpus)
         return self.transform(corpus)
     # end transform
 
