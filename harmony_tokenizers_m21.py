@@ -106,8 +106,8 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         return self.transform(corpus)
     # end fit_transform
 
-    def __call__(self, corpus):
-        return self.transform(corpus)
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 # end class MergedMelHarmTokenizer
 
@@ -120,6 +120,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
             '<unk>': 0,
@@ -128,9 +129,10 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
             '</s>': 3,
             '<emp>': 4,
             '<mask>': 5,
-            '<bar>': 6
+            '<bar>': 6,
+            '<h>': 7
         }
-        current_token_id = 7
+        current_token_id = 8
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -244,7 +246,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
         # Return the normalized chord symbol
         return f"{root}:{quality}"
 
-    def transform(self, corpus):
+    def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
         ids = []
 
@@ -258,8 +260,12 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
             # Create a mapping of measures to their quarter lengths
             measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
 
-            harmony_tokens = []
-            harmony_ids = []
+            if add_start_harmony_token:
+                harmony_tokens = [self.start_harmony_token]
+                harmony_ids = [self.vocab[self.start_harmony_token]]
+            else:
+                harmony_tokens = [self.bos_token]
+                harmony_ids = [self.vocab[self.bos_token]]
 
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
@@ -300,19 +306,19 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
             if unk_count > 0:
                 print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
-            tokens.append(harmony_tokens)
-            ids.append(harmony_ids)
+            tokens.append(harmony_tokens + [self.eos_token])
+            ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
     
 
-    def fit_transform(self, corpus):
+    def fit_transform(self, corpus, add_start_harmony_token=True):
         self.fit(corpus)
-        return self.transform(corpus)
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
-    def __call__(self, corpus):
-        return self.transform(corpus)
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 # end class ChordSymbolTokenizer
 
@@ -325,6 +331,7 @@ class RootTypeTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
             '<unk>': 0,
@@ -333,9 +340,10 @@ class RootTypeTokenizer(PreTrainedTokenizer):
             '</s>': 3,
             '<emp>': 4,
             '<mask>': 5,
-            '<bar>': 6
+            '<bar>': 6,
+            '<h>': 7
         }
-        current_token_id = 7
+        current_token_id = 8
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -451,7 +459,7 @@ class RootTypeTokenizer(PreTrainedTokenizer):
         # Return the normalized chord symbol
         return f"{root}", f"{quality}"
 
-    def transform(self, corpus):
+    def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
         ids = []
 
@@ -465,8 +473,12 @@ class RootTypeTokenizer(PreTrainedTokenizer):
             # Create a mapping of measures to their quarter lengths
             measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
 
-            harmony_tokens = []
-            harmony_ids = []
+            if add_start_harmony_token:
+                harmony_tokens = [self.start_harmony_token]
+                harmony_ids = [self.vocab[self.start_harmony_token]]
+            else:
+                harmony_tokens = [self.bos_token]
+                harmony_ids = [self.vocab[self.bos_token]]
 
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
@@ -515,19 +527,19 @@ class RootTypeTokenizer(PreTrainedTokenizer):
             if unk_count > 0:
                 print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
-            tokens.append(harmony_tokens)
-            ids.append(harmony_ids)
+            tokens.append(harmony_tokens + [self.eos_token])
+            ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
     
 
-    def fit_transform(self, corpus):
+    def fit_transform(self, corpus, add_start_harmony_token=True):
         self.fit(corpus)
-        return self.transform(corpus)
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
-    def __call__(self, corpus):
-        return self.transform(corpus)
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 # end class RootTypeTokenizer
 
@@ -540,6 +552,7 @@ class PitchClassTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
             '<unk>': 0,
@@ -548,9 +561,10 @@ class PitchClassTokenizer(PreTrainedTokenizer):
             '</s>': 3,
             '<emp>': 4,
             '<mask>': 5,
-            '<bar>': 6
+            '<bar>': 6,
+            '<h>': 7
         }
-        current_token_id = 7
+        current_token_id = 8
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -651,7 +665,7 @@ class PitchClassTokenizer(PreTrainedTokenizer):
         # Return the normalized chord symbol
         return f"{root}", f"{quality}"
 
-    def transform(self, corpus):
+    def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
         ids = []
 
@@ -665,8 +679,12 @@ class PitchClassTokenizer(PreTrainedTokenizer):
             # Create a mapping of measures to their quarter lengths
             measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
 
-            harmony_tokens = []
-            harmony_ids = []
+            if add_start_harmony_token:
+                harmony_tokens = [self.start_harmony_token]
+                harmony_ids = [self.vocab[self.start_harmony_token]]
+            else:
+                harmony_tokens = [self.bos_token]
+                harmony_ids = [self.vocab[self.bos_token]]
 
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
@@ -711,19 +729,19 @@ class PitchClassTokenizer(PreTrainedTokenizer):
             if unk_count > 0:
                 print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
-            tokens.append(harmony_tokens)
-            ids.append(harmony_ids)
+            tokens.append(harmony_tokens + [self.eos_token])
+            ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
     
 
-    def fit_transform(self, corpus):
+    def fit_transform(self, corpus, add_start_harmony_token=True):
         self.fit(corpus)
-        return self.transform(corpus)
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
-    def __call__(self, corpus):
-        return self.transform(corpus)
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 # end class PitchClassTokenizer
 
@@ -736,6 +754,7 @@ class RootPCTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
             '<unk>': 0,
@@ -744,9 +763,10 @@ class RootPCTokenizer(PreTrainedTokenizer):
             '</s>': 3,
             '<emp>': 4,
             '<mask>': 5,
-            '<bar>': 6
+            '<bar>': 6,
+            '<h>': 7
         }
-        current_token_id = 7
+        current_token_id = 8
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -849,7 +869,7 @@ class RootPCTokenizer(PreTrainedTokenizer):
         # Return the normalized chord symbol
         return f"{root}", f"{quality}"
 
-    def transform(self, corpus):
+    def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
         ids = []
 
@@ -863,8 +883,12 @@ class RootPCTokenizer(PreTrainedTokenizer):
             # Create a mapping of measures to their quarter lengths
             measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
 
-            harmony_tokens = []
-            harmony_ids = []
+            if add_start_harmony_token:
+                harmony_tokens = [self.start_harmony_token]
+                harmony_ids = [self.vocab[self.start_harmony_token]]
+            else:
+                harmony_tokens = [self.bos_token]
+                harmony_ids = [self.vocab[self.bos_token]]
 
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
@@ -913,19 +937,19 @@ class RootPCTokenizer(PreTrainedTokenizer):
             if unk_count > 0:
                 print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
-            tokens.append(harmony_tokens)
-            ids.append(harmony_ids)
+            tokens.append(harmony_tokens + [self.eos_token])
+            ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
     
 
-    def fit_transform(self, corpus):
+    def fit_transform(self, corpus, add_start_harmony_token=True):
         self.fit(corpus)
-        return self.transform(corpus)
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
-    def __call__(self, corpus):
-        return self.transform(corpus)
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 # end class RootPCTokenizer
 
@@ -938,6 +962,7 @@ class GCTRootPCTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
             '<unk>': 0,
@@ -946,9 +971,10 @@ class GCTRootPCTokenizer(PreTrainedTokenizer):
             '</s>': 3,
             '<emp>': 4,
             '<mask>': 5,
-            '<bar>': 6
+            '<bar>': 6,
+            '<h>': 7
         }
-        current_token_id = 7
+        current_token_id = 8
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -1051,7 +1077,7 @@ class GCTRootPCTokenizer(PreTrainedTokenizer):
         # Return the normalized chord symbol
         return f"{root}", f"{quality}"
 
-    def transform(self, corpus):
+    def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
         ids = []
 
@@ -1065,8 +1091,12 @@ class GCTRootPCTokenizer(PreTrainedTokenizer):
             # Create a mapping of measures to their quarter lengths
             measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
 
-            harmony_tokens = []
-            harmony_ids = []
+            if add_start_harmony_token:
+                harmony_tokens = [self.start_harmony_token]
+                harmony_ids = [self.vocab[self.start_harmony_token]]
+            else:
+                harmony_tokens = [self.bos_token]
+                harmony_ids = [self.vocab[self.bos_token]]
 
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
@@ -1118,19 +1148,19 @@ class GCTRootPCTokenizer(PreTrainedTokenizer):
             if unk_count > 0:
                 print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
-            tokens.append(harmony_tokens)
-            ids.append(harmony_ids)
+            tokens.append(harmony_tokens + [self.eos_token])
+            ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
     
 
-    def fit_transform(self, corpus):
+    def fit_transform(self, corpus, add_start_harmony_token=True):
         self.fit(corpus)
-        return self.transform(corpus)
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
-    def __call__(self, corpus):
-        return self.transform(corpus)
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 # end class GCTRootPCTokenizer
 
@@ -1143,6 +1173,7 @@ class GCTSymbolTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
             '<unk>': 0,
@@ -1151,9 +1182,10 @@ class GCTSymbolTokenizer(PreTrainedTokenizer):
             '</s>': 3,
             '<emp>': 4,
             '<mask>': 5,
-            '<bar>': 6
+            '<bar>': 6,
+            '<h>': 7
         }
-        current_token_id = 7
+        current_token_id = 8
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -1280,7 +1312,7 @@ class GCTSymbolTokenizer(PreTrainedTokenizer):
         # Return the normalized chord symbol
         return f"{root}", f"{quality}"
 
-    def transform(self, corpus):
+    def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
         ids = []
 
@@ -1294,8 +1326,12 @@ class GCTSymbolTokenizer(PreTrainedTokenizer):
             # Create a mapping of measures to their quarter lengths
             measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
 
-            harmony_tokens = []
-            harmony_ids = []
+            if add_start_harmony_token:
+                harmony_tokens = [self.start_harmony_token]
+                harmony_ids = [self.vocab[self.start_harmony_token]]
+            else:
+                harmony_tokens = [self.bos_token]
+                harmony_ids = [self.vocab[self.bos_token]]
 
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
@@ -1343,19 +1379,19 @@ class GCTSymbolTokenizer(PreTrainedTokenizer):
             if unk_count > 0:
                 print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
-            tokens.append(harmony_tokens)
-            ids.append(harmony_ids)
+            tokens.append(harmony_tokens + [self.eos_token])
+            ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
     
 
-    def fit_transform(self, corpus):
+    def fit_transform(self, corpus, add_start_harmony_token=True):
         self.fit(corpus)
-        return self.transform(corpus)
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
-    def __call__(self, corpus):
-        return self.transform(corpus)
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 # end class GCTSymbolTokenizer
 
@@ -1368,6 +1404,7 @@ class GCTRootTypeTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
             '<unk>': 0,
@@ -1376,9 +1413,10 @@ class GCTRootTypeTokenizer(PreTrainedTokenizer):
             '</s>': 3,
             '<emp>': 4,
             '<mask>': 5,
-            '<bar>': 6
+            '<bar>': 6,
+            '<h>': 7
         }
-        current_token_id = 7
+        current_token_id = 8
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine time quantization tokens for a single measure
@@ -1509,7 +1547,7 @@ class GCTRootTypeTokenizer(PreTrainedTokenizer):
         # Return the normalized chord symbol
         return f"{root}", f"{quality}"
 
-    def transform(self, corpus):
+    def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
         ids = []
 
@@ -1523,8 +1561,12 @@ class GCTRootTypeTokenizer(PreTrainedTokenizer):
             # Create a mapping of measures to their quarter lengths
             measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
 
-            harmony_tokens = []
-            harmony_ids = []
+            if add_start_harmony_token:
+                harmony_tokens = [self.start_harmony_token]
+                harmony_ids = [self.vocab[self.start_harmony_token]]
+            else:
+                harmony_tokens = [self.bos_token]
+                harmony_ids = [self.vocab[self.bos_token]]
 
             # Ensure every measure (even empty ones) generates tokens
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
@@ -1577,19 +1619,19 @@ class GCTRootTypeTokenizer(PreTrainedTokenizer):
             if unk_count > 0:
                 print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
-            tokens.append(harmony_tokens)
-            ids.append(harmony_ids)
+            tokens.append(harmony_tokens + [self.eos_token])
+            ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
     
 
-    def fit_transform(self, corpus):
+    def fit_transform(self, corpus, add_start_harmony_token=True):
         self.fit(corpus)
-        return self.transform(corpus)
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
-    def __call__(self, corpus):
-        return self.transform(corpus)
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 # end class GCTRootTypeTokenizer
 
@@ -1602,6 +1644,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         self.pad_token = '<pad>'
         self.bos_token = '<s>'
         self.eos_token = '</s>'
+        self.mask_token = '<mask>'
+        self.csl_token = '<s>'
         self.min_pitch = min_pitch  # Minimum MIDI pitch value (e.g., 21 for A0)
         self.max_pitch = max_pitch  # Maximum MIDI pitch value (e.g., 108 for C8)
         self.vocab = {
@@ -1679,8 +1723,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
             # Create a mapping of measures to their quarter lengths
             measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
 
-            melody_tokens = []
-            melody_ids = []
+            melody_tokens = [self.bos_token]
+            melody_ids = [self.vocab[self.bos_token]]
 
             for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
                 # Add a "bar" token for each measure
@@ -1737,8 +1781,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
             if unk_count > 0:
                 print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
-            tokens.append(melody_tokens)
-            ids.append(melody_ids)
+            tokens.append(melody_tokens + [self.eos_token])
+            ids.append(melody_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
     
