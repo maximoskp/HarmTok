@@ -40,6 +40,7 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         # merge vocabularies - start with mel_tokinzer
         self.vocab = mel_tokenizer.vocab
@@ -120,6 +121,7 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
@@ -331,6 +333,7 @@ class RootTypeTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
@@ -552,6 +555,7 @@ class PitchClassTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
@@ -754,6 +758,7 @@ class RootPCTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
@@ -962,6 +967,7 @@ class GCTRootPCTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
@@ -1173,6 +1179,7 @@ class GCTSymbolTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
@@ -1404,6 +1411,7 @@ class GCTRootTypeTokenizer(PreTrainedTokenizer):
         self.empty_chord = '<emp>'
         self.csl_token = '<s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self.start_harmony_token = '<h>'
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         self.vocab = {
@@ -1645,6 +1653,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         self.bos_token = '<s>'
         self.eos_token = '</s>'
         self.mask_token = '<mask>'
+        self.special_tokens = {}
         self.csl_token = '<s>'
         self.min_pitch = min_pitch  # Minimum MIDI pitch value (e.g., 21 for A0)
         self.max_pitch = max_pitch  # Maximum MIDI pitch value (e.g., 108 for C8)
