@@ -28,6 +28,139 @@ for k in list(MIR_QUALITIES.keys()) + ['7(b9)', '7(#9)', '7(#11)', '7(b13)']:
     _, semitone_bitmap, _ = mir_eval.chord.encode( 'C' + (len(k) > 0)*':' + k, reduce_extended_chords=True )
     EXT_MIR_QUALITIES[k] = semitone_bitmap
 
+class HarmonyTokenizerBase(PreTrainedTokenizer):
+    def __init__(self):
+        self.unk_token = '<unk>'
+        self.pad_token = '<pad>'
+        self.bos_token = '<s>'
+        self.eos_token = '</s>'
+        self.empty_chord = '<emp>'
+        self.csl_token = '<s>'
+        self.mask_token = '<mask>'
+        self.special_tokens = {}
+        self.start_harmony_token = '<h>'
+        self._added_tokens_encoder = {} # TODO: allow for special tokens
+        self.vocab = {
+            '<unk>': 0,
+            '<pad>': 1,
+            '<s>': 2,
+            '</s>': 3,
+            '<emp>': 4,
+            '<mask>': 5,
+            '<bar>': 6,
+            '<h>': 7
+        }
+        self.time_quantization = []  # Store predefined quantized times
+
+        # Predefine time quantization tokens for a single measure
+        max_quarters = 10  # Support up to 10/4 time signatures
+        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
+        for quarter in range(max_quarters):
+            for subdivision in subdivisions:
+                quant_time = round(quarter + subdivision, 3)
+                self.time_quantization.append(quant_time)  # Save for later reference
+                # Format time tokens with two-digit subdivisions
+                quarter_part = int(quant_time)
+                subdivision_part = int(round((quant_time - quarter_part) * 100))
+                time_token = f'position_{quarter_part}x{subdivision_part:02}'
+                self.vocab[time_token] = len(self.vocab)
+    # end init
+
+    def convert_tokens_to_ids(self, tokens):
+        if isinstance(tokens, str):
+            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+        return [self.vocab[token] for token in tokens]
+    # end convert_tokens_to_ids
+
+    def convert_ids_to_tokens(self, ids):
+        if isinstance(ids, int):
+            return self.ids_to_tokens.get(ids, self.unk_token)
+        return [self.ids_to_tokens[i] for i in ids]
+    # end convert_ids_to_tokens
+
+    def find_closest_quantized_time(self, offset):
+        # Find the closest predefined quantized time
+        closest_time = min(self.time_quantization, key=lambda t: abs(t - offset))
+        quarter = int(closest_time)
+        subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
+        return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
+    # end find_closest_quantized_time
+    
+    def normalize_root_to_sharps(self, root):
+        """
+        Normalize chord roots to sharp notation, handling special cases like '-' for sharps.
+        """
+        # Custom mapping for cases like "D-" → "C#"
+        special_mapping = {
+            'C-': 'B',
+            'D-': 'C#',
+            'E-': 'D#',
+            'F-': 'E',
+            'E#': 'F',
+            'G-': 'F#',
+            'A-': 'G#',
+            'B-': 'A#',
+            'B#': 'C'
+        }
+
+        # Check if the root matches a special case
+        if root in special_mapping:
+            return special_mapping[root]
+
+        # Use music21 to normalize root to sharp notation otherwise
+        pitch_obj = pitch.Pitch(root)
+        return pitch_obj.name  # Always return the sharp representation
+    # end normalize_root_to_sharps
+
+    def get_closest_mir_eval_symbol(self, chord_symbol):
+        # get binary type representation
+        # transpose to c major
+        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
+        tc = chord_symbol.transpose(ti)
+        # make binary
+        b = np.zeros(12)
+        b[tc.pitchClasses] = 1
+        similarity_max = -1
+        key_max = '<unk>'
+        for k in EXT_MIR_QUALITIES.keys():
+            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
+            if similarity_max < tmp_similarity:
+                similarity_max = tmp_similarity
+                key_max = k
+        return key_max
+    # end get_closest_mir_eval_symbol
+
+    def normalize_chord_symbol(self, chord_symbol):
+        """
+        Normalize a music21 chord symbol to match the predefined vocabulary.
+        """
+        # Normalize root to sharp notation
+        root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
+        quality = self.get_closest_mir_eval_symbol( chord_symbol )
+
+        # Return the normalized chord symbol
+        return f"{root}", f"{quality}"
+    # end normalize_chord_symbol
+
+    def fit(self, corpus):
+        raise NotImplementedError()
+    # end fit
+
+    def transform(self, corpus, add_start_harmony_token=True):
+        raise NotImplementedError()
+    # end fit
+
+    def fit_transform(self, corpus, add_start_harmony_token=True):
+        self.fit(corpus)
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+    # end transform
+
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+    # end __call__
+
+# end class HarmonyTokenizerBase
+
 class MergedMelHarmTokenizer(PreTrainedTokenizer):
     def __init__(self, mel_tokenizer, harm_tokenizer, verbose=0):
         self.mel_tokenizer = mel_tokenizer
@@ -112,45 +245,9 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
     # end __call__
 # end class MergedMelHarmTokenizer
 
-class ChordSymbolTokenizer(PreTrainedTokenizer):
-    def __init__(self):
-        self.unk_token = '<unk>'
-        self.pad_token = '<pad>'
-        self.bos_token = '<s>'
-        self.eos_token = '</s>'
-        self.empty_chord = '<emp>'
-        self.csl_token = '<s>'
-        self.mask_token = '<mask>'
-        self.special_tokens = {}
-        self.start_harmony_token = '<h>'
-        self._added_tokens_encoder = {} # TODO: allow for special tokens
-        self.vocab = {
-            '<unk>': 0,
-            '<pad>': 1,
-            '<s>': 2,
-            '</s>': 3,
-            '<emp>': 4,
-            '<mask>': 5,
-            '<bar>': 6,
-            '<h>': 7
-        }
-        current_token_id = 8
-        self.time_quantization = []  # Store predefined quantized times
-
-        # Predefine time quantization tokens for a single measure
-        max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
-        for quarter in range(max_quarters):
-            for subdivision in subdivisions:
-                quant_time = round(quarter + subdivision, 3)
-                self.time_quantization.append(quant_time)  # Save for later reference
-                # Format time tokens with two-digit subdivisions
-                quarter_part = int(quant_time)
-                subdivision_part = int(round((quant_time - quarter_part) * 100))
-                time_token = f'position_{quarter_part}x{subdivision_part:02}'
-                self.vocab[time_token] = current_token_id
-                current_token_id += 1
-
+class ChordSymbolTokenizer(HarmonyTokenizerBase):
+    def __init__(self, **kwargs):
+        super(ChordSymbolTokenizer, self).__init__(**kwargs)
         # Generate chord tokens dynamically, forcing sharp notation
         chromatic_roots = []
         for i in range(12):
@@ -166,87 +263,13 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
             for quality in qualities:
                     chord_token = f'{root}:{quality}'
                     #print(chord_token)
-                    self.vocab[chord_token] = current_token_id
-                    current_token_id += 1
+                    self.vocab[chord_token] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
-
-    def convert_tokens_to_ids(self, tokens):
-        if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
-        return [self.vocab[token] for token in tokens]
-    # end convert_tokens_to_ids
-
-    def convert_ids_to_tokens(self, ids):
-        if isinstance(ids, int):
-            return self.ids_to_tokens.get(ids, self.unk_token)
-        return [self.ids_to_tokens[i] for i in ids]
-    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
     # end fit
-
-
-    def find_closest_quantized_time(self, offset):
-        # Find the closest predefined quantized time
-        closest_time = min(self.time_quantization, key=lambda t: abs(t - offset))
-        quarter = int(closest_time)
-        subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
-        return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
-    
-    def normalize_root_to_sharps(self, root):
-        """
-        Normalize chord roots to sharp notation, handling special cases like '-' for sharps.
-        """
-        # Custom mapping for cases like "D-" → "C#"
-        special_mapping = {
-            'C-': 'B',
-            'D-': 'C#',
-            'E-': 'D#',
-            'F-': 'E',
-            'E#': 'F',
-            'G-': 'F#',
-            'A-': 'G#',
-            'B-': 'A#',
-            'B#': 'C'
-        }
-
-        # Check if the root matches a special case
-        if root in special_mapping:
-            return special_mapping[root]
-
-        # Use music21 to normalize root to sharp notation otherwise
-        pitch_obj = pitch.Pitch(root)
-        return pitch_obj.name  # Always return the sharp representation
-
-    def get_closest_mir_eval_symbol(self, chord_symbol):
-        # get binary type representation
-        # transpose to c major
-        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
-        tc = chord_symbol.transpose(ti)
-        # make binary
-        b = np.zeros(12)
-        b[tc.pitchClasses] = 1
-        similarity_max = -1
-        key_max = '<unk>'
-        for k in EXT_MIR_QUALITIES.keys():
-            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
-            if similarity_max < tmp_similarity:
-                similarity_max = tmp_similarity
-                key_max = k
-        return key_max
-
-    def normalize_chord_symbol(self, chord_symbol):
-        """
-        Normalize a music21 chord symbol to match the predefined vocabulary.
-        """
-        # Normalize root to sharp notation
-        root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
-        quality = self.get_closest_mir_eval_symbol( chord_symbol )
-
-        # Return the normalized chord symbol
-        return f"{root}:{quality}"
 
     def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
@@ -294,7 +317,8 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
                     harmony_ids.append(self.vocab[time_token])
 
                     # Normalize and add the chord symbol
-                    chord_token = self.normalize_chord_symbol(h)
+                    root_token, type_token = self.normalize_chord_symbol(h)
+                    chord_token = root_token + ':' + type_token
                     if chord_token in self.vocab:
                         harmony_tokens.append(chord_token)
                         harmony_ids.append(self.vocab[chord_token])
@@ -312,57 +336,12 @@ class ChordSymbolTokenizer(PreTrainedTokenizer):
             ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
-    
-
-    def fit_transform(self, corpus, add_start_harmony_token=True):
-        self.fit(corpus)
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
-
-    def __call__(self, corpus, add_start_harmony_token=True):
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
-    # end __call__
 # end class ChordSymbolTokenizer
 
-class RootTypeTokenizer(PreTrainedTokenizer):
-    def __init__(self):
-        self.unk_token = '<unk>'
-        self.pad_token = '<pad>'
-        self.bos_token = '<s>'
-        self.eos_token = '</s>'
-        self.empty_chord = '<emp>'
-        self.csl_token = '<s>'
-        self.mask_token = '<mask>'
-        self.special_tokens = {}
-        self.start_harmony_token = '<h>'
-        self._added_tokens_encoder = {} # TODO: allow for special tokens
-        self.vocab = {
-            '<unk>': 0,
-            '<pad>': 1,
-            '<s>': 2,
-            '</s>': 3,
-            '<emp>': 4,
-            '<mask>': 5,
-            '<bar>': 6,
-            '<h>': 7
-        }
-        current_token_id = 8
-        self.time_quantization = []  # Store predefined quantized times
-
-        # Predefine time quantization tokens for a single measure
-        max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
-        for quarter in range(max_quarters):
-            for subdivision in subdivisions:
-                quant_time = round(quarter + subdivision, 3)
-                self.time_quantization.append(quant_time)  # Save for later reference
-                # Format time tokens with two-digit subdivisions
-                quarter_part = int(quant_time)
-                subdivision_part = int(round((quant_time - quarter_part) * 100))
-                time_token = f'position_{quarter_part}x{subdivision_part:02}'
-                self.vocab[time_token] = current_token_id
-                current_token_id += 1
-
+class RootTypeTokenizer(HarmonyTokenizerBase):
+    def __init__(self, **kwargs):
+        super(RootTypeTokenizer, self).__init__(**kwargs)
         # Generate chord tokens dynamically, forcing sharp notation
         chromatic_roots = []
         for i in range(12):
@@ -375,93 +354,18 @@ class RootTypeTokenizer(PreTrainedTokenizer):
         qualities = list(EXT_MIR_QUALITIES.keys())
 
         for root in chromatic_roots:
-            self.vocab[ root ] = current_token_id
-            current_token_id += 1
+            self.vocab[ root ] = len(self.vocab)
         for quality in qualities:
                 quality_token = f'{quality}'
                 #print(chord_token)
-                self.vocab[quality_token] = current_token_id
-                current_token_id += 1
+                self.vocab[quality_token] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
-
-    def convert_tokens_to_ids(self, tokens):
-        if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
-        return [self.vocab[token] for token in tokens]
-    # end convert_tokens_to_ids
-
-    def convert_ids_to_tokens(self, ids):
-        if isinstance(ids, int):
-            return self.ids_to_tokens.get(ids, self.unk_token)
-        return [self.ids_to_tokens[i] for i in ids]
-    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
     # end fit
-
-
-    def find_closest_quantized_time(self, offset):
-        # Find the closest predefined quantized time
-        closest_time = min(self.time_quantization, key=lambda t: abs(t - offset))
-        quarter = int(closest_time)
-        subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
-        return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
     
-    def normalize_root_to_sharps(self, root):
-        """
-        Normalize chord roots to sharp notation, handling special cases like '-' for sharps.
-        """
-        # Custom mapping for cases like "D-" → "C#"
-        special_mapping = {
-            'C-': 'B',
-            'D-': 'C#',
-            'E-': 'D#',
-            'F-': 'E',
-            'E#': 'F',
-            'G-': 'F#',
-            'A-': 'G#',
-            'B-': 'A#',
-            'B#': 'C'
-        }
-
-        # Check if the root matches a special case
-        if root in special_mapping:
-            return special_mapping[root]
-
-        # Use music21 to normalize root to sharp notation otherwise
-        pitch_obj = pitch.Pitch(root)
-        return pitch_obj.name  # Always return the sharp representation
-
-    def get_closest_mir_eval_symbol(self, chord_symbol):
-        # get binary type representation
-        # transpose to c major
-        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
-        tc = chord_symbol.transpose(ti)
-        # make binary
-        b = np.zeros(12)
-        b[tc.pitchClasses] = 1
-        similarity_max = -1
-        key_max = '<unk>'
-        for k in EXT_MIR_QUALITIES.keys():
-            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
-            if similarity_max < tmp_similarity:
-                similarity_max = tmp_similarity
-                key_max = k
-        return key_max
-
-    def normalize_chord_symbol(self, chord_symbol):
-        """
-        Normalize a music21 chord symbol to match the predefined vocabulary.
-        """
-        # Normalize root to sharp notation
-        root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
-        quality = self.get_closest_mir_eval_symbol( chord_symbol )
-
-        # Return the normalized chord symbol
-        return f"{root}", f"{quality}"
-
     def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
         ids = []
@@ -534,11 +438,6 @@ class RootTypeTokenizer(PreTrainedTokenizer):
             ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
-    
-
-    def fit_transform(self, corpus, add_start_harmony_token=True):
-        self.fit(corpus)
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -546,128 +445,18 @@ class RootTypeTokenizer(PreTrainedTokenizer):
     # end __call__
 # end class RootTypeTokenizer
 
-class PitchClassTokenizer(PreTrainedTokenizer):
-    def __init__(self):
-        self.unk_token = '<unk>'
-        self.pad_token = '<pad>'
-        self.bos_token = '<s>'
-        self.eos_token = '</s>'
-        self.empty_chord = '<emp>'
-        self.csl_token = '<s>'
-        self.mask_token = '<mask>'
-        self.special_tokens = {}
-        self.start_harmony_token = '<h>'
-        self._added_tokens_encoder = {} # TODO: allow for special tokens
-        self.vocab = {
-            '<unk>': 0,
-            '<pad>': 1,
-            '<s>': 2,
-            '</s>': 3,
-            '<emp>': 4,
-            '<mask>': 5,
-            '<bar>': 6,
-            '<h>': 7
-        }
-        current_token_id = 8
-        self.time_quantization = []  # Store predefined quantized times
-
-        # Predefine time quantization tokens for a single measure
-        max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
-        for quarter in range(max_quarters):
-            for subdivision in subdivisions:
-                quant_time = round(quarter + subdivision, 3)
-                self.time_quantization.append(quant_time)  # Save for later reference
-                # Format time tokens with two-digit subdivisions
-                quarter_part = int(quant_time)
-                subdivision_part = int(round((quant_time - quarter_part) * 100))
-                time_token = f'position_{quarter_part}x{subdivision_part:02}'
-                self.vocab[time_token] = current_token_id
-                current_token_id += 1
-
+class PitchClassTokenizer(HarmonyTokenizerBase):
+    def __init__(self, **kwargs):
+        super(PitchClassTokenizer, self).__init__(**kwargs)
         # chord pitch classes
         for pc in range(12):
-            self.vocab['chord_pc_' + str(pc)] = current_token_id
-            current_token_id += 1
+            self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
-
-    def convert_tokens_to_ids(self, tokens):
-        if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
-        return [self.vocab[token] for token in tokens]
-    # end convert_tokens_to_ids
-
-    def convert_ids_to_tokens(self, ids):
-        if isinstance(ids, int):
-            return self.ids_to_tokens.get(ids, self.unk_token)
-        return [self.ids_to_tokens[i] for i in ids]
-    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
     # end fit
-
-
-    def find_closest_quantized_time(self, offset):
-        # Find the closest predefined quantized time
-        closest_time = min(self.time_quantization, key=lambda t: abs(t - offset))
-        quarter = int(closest_time)
-        subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
-        return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
-    
-    def normalize_root_to_sharps(self, root):
-        """
-        Normalize chord roots to sharp notation, handling special cases like '-' for sharps.
-        """
-        # Custom mapping for cases like "D-" → "C#"
-        special_mapping = {
-            'C-': 'B',
-            'D-': 'C#',
-            'E-': 'D#',
-            'F-': 'E',
-            'E#': 'F',
-            'G-': 'F#',
-            'A-': 'G#',
-            'B-': 'A#',
-            'B#': 'C'
-        }
-
-        # Check if the root matches a special case
-        if root in special_mapping:
-            return special_mapping[root]
-
-        # Use music21 to normalize root to sharp notation otherwise
-        pitch_obj = pitch.Pitch(root)
-        return pitch_obj.name  # Always return the sharp representation
-
-    def get_closest_mir_eval_symbol(self, chord_symbol):
-        # get binary type representation
-        # transpose to c major
-        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
-        tc = chord_symbol.transpose(ti)
-        # make binary
-        b = np.zeros(12)
-        b[tc.pitchClasses] = 1
-        similarity_max = -1
-        key_max = '<unk>'
-        for k in EXT_MIR_QUALITIES.keys():
-            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
-            if similarity_max < tmp_similarity:
-                similarity_max = tmp_similarity
-                key_max = k
-        return key_max
-
-    def normalize_chord_symbol(self, chord_symbol):
-        """
-        Normalize a music21 chord symbol to match the predefined vocabulary.
-        """
-        # Normalize root to sharp notation
-        root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
-        quality = self.get_closest_mir_eval_symbol( chord_symbol )
-
-        # Return the normalized chord symbol
-        return f"{root}", f"{quality}"
 
     def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
@@ -737,11 +526,6 @@ class PitchClassTokenizer(PreTrainedTokenizer):
             ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
-    
-
-    def fit_transform(self, corpus, add_start_harmony_token=True):
-        self.fit(corpus)
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -749,130 +533,16 @@ class PitchClassTokenizer(PreTrainedTokenizer):
     # end __call__
 # end class PitchClassTokenizer
 
-class RootPCTokenizer(PreTrainedTokenizer):
-    def __init__(self):
-        self.unk_token = '<unk>'
-        self.pad_token = '<pad>'
-        self.bos_token = '<s>'
-        self.eos_token = '</s>'
-        self.empty_chord = '<emp>'
-        self.csl_token = '<s>'
-        self.mask_token = '<mask>'
-        self.special_tokens = {}
-        self.start_harmony_token = '<h>'
-        self._added_tokens_encoder = {} # TODO: allow for special tokens
-        self.vocab = {
-            '<unk>': 0,
-            '<pad>': 1,
-            '<s>': 2,
-            '</s>': 3,
-            '<emp>': 4,
-            '<mask>': 5,
-            '<bar>': 6,
-            '<h>': 7
-        }
-        current_token_id = 8
-        self.time_quantization = []  # Store predefined quantized times
-
-        # Predefine time quantization tokens for a single measure
-        max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
-        for quarter in range(max_quarters):
-            for subdivision in subdivisions:
-                quant_time = round(quarter + subdivision, 3)
-                self.time_quantization.append(quant_time)  # Save for later reference
-                # Format time tokens with two-digit subdivisions
-                quarter_part = int(quant_time)
-                subdivision_part = int(round((quant_time - quarter_part) * 100))
-                time_token = f'position_{quarter_part}x{subdivision_part:02}'
-                self.vocab[time_token] = current_token_id
-                current_token_id += 1
-
+class RootPCTokenizer(HarmonyTokenizerBase):
+    def __init__(self, **kwargs):
+        super(RootPCTokenizer, self).__init__(**kwargs)
         # chord root and pitch classes
         for root in range(12):
-            self.vocab['chord_root_' + str(root)] = current_token_id
-            current_token_id += 1
+            self.vocab['chord_root_' + str(root)] = len(self.vocab)
         for pc in range(12):
-            self.vocab['chord_pc_' + str(pc)] = current_token_id
-            current_token_id += 1
+            self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
-
-    def convert_tokens_to_ids(self, tokens):
-        if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
-        return [self.vocab[token] for token in tokens]
-    # end convert_tokens_to_ids
-
-    def convert_ids_to_tokens(self, ids):
-        if isinstance(ids, int):
-            return self.ids_to_tokens.get(ids, self.unk_token)
-        return [self.ids_to_tokens[i] for i in ids]
-    # end convert_ids_to_tokens
-
-    def fit(self, corpus):
-        pass
-    # end fit
-
-    def find_closest_quantized_time(self, offset):
-        # Find the closest predefined quantized time
-        closest_time = min(self.time_quantization, key=lambda t: abs(t - offset))
-        quarter = int(closest_time)
-        subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
-        return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
-    
-    def normalize_root_to_sharps(self, root):
-        """
-        Normalize chord roots to sharp notation, handling special cases like '-' for sharps.
-        """
-        # Custom mapping for cases like "D-" → "C#"
-        special_mapping = {
-            'C-': 'B',
-            'D-': 'C#',
-            'E-': 'D#',
-            'F-': 'E',
-            'E#': 'F',
-            'G-': 'F#',
-            'A-': 'G#',
-            'B-': 'A#',
-            'B#': 'C'
-        }
-
-        # Check if the root matches a special case
-        if root in special_mapping:
-            return special_mapping[root]
-
-        # Use music21 to normalize root to sharp notation otherwise
-        pitch_obj = pitch.Pitch(root)
-        return pitch_obj.name  # Always return the sharp representation
-
-    def get_closest_mir_eval_symbol(self, chord_symbol):
-        # get binary type representation
-        # transpose to c major
-        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
-        tc = chord_symbol.transpose(ti)
-        # make binary
-        b = np.zeros(12)
-        b[tc.pitchClasses] = 1
-        similarity_max = -1
-        key_max = '<unk>'
-        for k in EXT_MIR_QUALITIES.keys():
-            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
-            if similarity_max < tmp_similarity:
-                similarity_max = tmp_similarity
-                key_max = k
-        return key_max
-
-    def normalize_chord_symbol(self, chord_symbol):
-        """
-        Normalize a music21 chord symbol to match the predefined vocabulary.
-        """
-        # Normalize root to sharp notation
-        root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
-        quality = self.get_closest_mir_eval_symbol( chord_symbol )
-
-        # Return the normalized chord symbol
-        return f"{root}", f"{quality}"
 
     def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
@@ -946,142 +616,23 @@ class RootPCTokenizer(PreTrainedTokenizer):
             ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
-    
-
-    def fit_transform(self, corpus, add_start_harmony_token=True):
-        self.fit(corpus)
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
-
-    def __call__(self, corpus, add_start_harmony_token=True):
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
-    # end __call__
 # end class RootPCTokenizer
 
-class GCTRootPCTokenizer(PreTrainedTokenizer):
-    def __init__(self):
-        self.unk_token = '<unk>'
-        self.pad_token = '<pad>'
-        self.bos_token = '<s>'
-        self.eos_token = '</s>'
-        self.empty_chord = '<emp>'
-        self.csl_token = '<s>'
-        self.mask_token = '<mask>'
-        self.special_tokens = {}
-        self.start_harmony_token = '<h>'
-        self._added_tokens_encoder = {} # TODO: allow for special tokens
-        self.vocab = {
-            '<unk>': 0,
-            '<pad>': 1,
-            '<s>': 2,
-            '</s>': 3,
-            '<emp>': 4,
-            '<mask>': 5,
-            '<bar>': 6,
-            '<h>': 7
-        }
-        current_token_id = 8
-        self.time_quantization = []  # Store predefined quantized times
-
-        # Predefine time quantization tokens for a single measure
-        max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
-        for quarter in range(max_quarters):
-            for subdivision in subdivisions:
-                quant_time = round(quarter + subdivision, 3)
-                self.time_quantization.append(quant_time)  # Save for later reference
-                # Format time tokens with two-digit subdivisions
-                quarter_part = int(quant_time)
-                subdivision_part = int(round((quant_time - quarter_part) * 100))
-                time_token = f'position_{quarter_part}x{subdivision_part:02}'
-                self.vocab[time_token] = current_token_id
-                current_token_id += 1
-
+class GCTRootPCTokenizer(HarmonyTokenizerBase):
+    def __init__(self, **kwargs):
+        super(GCTRootPCTokenizer, self).__init__(**kwargs)
         # chord root and pitch classes
         for root in range(12):
-            self.vocab['chord_root_' + str(root)] = current_token_id
-            current_token_id += 1
+            self.vocab['chord_root_' + str(root)] = len(self.vocab)
         for pc in range(12):
-            self.vocab['chord_pc_' + str(pc)] = current_token_id
-            current_token_id += 1
+            self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
-
-    def convert_tokens_to_ids(self, tokens):
-        if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
-        return [self.vocab[token] for token in tokens]
-    # end convert_tokens_to_ids
-
-    def convert_ids_to_tokens(self, ids):
-        if isinstance(ids, int):
-            return self.ids_to_tokens.get(ids, self.unk_token)
-        return [self.ids_to_tokens[i] for i in ids]
-    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         pass
     # end fit
-
-    def find_closest_quantized_time(self, offset):
-        # Find the closest predefined quantized time
-        closest_time = min(self.time_quantization, key=lambda t: abs(t - offset))
-        quarter = int(closest_time)
-        subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
-        return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
-    
-    def normalize_root_to_sharps(self, root):
-        """
-        Normalize chord roots to sharp notation, handling special cases like '-' for sharps.
-        """
-        # Custom mapping for cases like "D-" → "C#"
-        special_mapping = {
-            'C-': 'B',
-            'D-': 'C#',
-            'E-': 'D#',
-            'F-': 'E',
-            'E#': 'F',
-            'G-': 'F#',
-            'A-': 'G#',
-            'B-': 'A#',
-            'B#': 'C'
-        }
-
-        # Check if the root matches a special case
-        if root in special_mapping:
-            return special_mapping[root]
-
-        # Use music21 to normalize root to sharp notation otherwise
-        pitch_obj = pitch.Pitch(root)
-        return pitch_obj.name  # Always return the sharp representation
-
-    def get_closest_mir_eval_symbol(self, chord_symbol):
-        # get binary type representation
-        # transpose to c major
-        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
-        tc = chord_symbol.transpose(ti)
-        # make binary
-        b = np.zeros(12)
-        b[tc.pitchClasses] = 1
-        similarity_max = -1
-        key_max = '<unk>'
-        for k in EXT_MIR_QUALITIES.keys():
-            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
-            if similarity_max < tmp_similarity:
-                similarity_max = tmp_similarity
-                key_max = k
-        return key_max
-
-    def normalize_chord_symbol(self, chord_symbol):
-        """
-        Normalize a music21 chord symbol to match the predefined vocabulary.
-        """
-        # Normalize root to sharp notation
-        root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
-        quality = self.get_closest_mir_eval_symbol( chord_symbol )
-
-        # Return the normalized chord symbol
-        return f"{root}", f"{quality}"
 
     def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
@@ -1158,69 +709,13 @@ class GCTRootPCTokenizer(PreTrainedTokenizer):
             ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
-    
-
-    def fit_transform(self, corpus, add_start_harmony_token=True):
-        self.fit(corpus)
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
-
-    def __call__(self, corpus, add_start_harmony_token=True):
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
-    # end __call__
 # end class GCTRootPCTokenizer
 
-class GCTSymbolTokenizer(PreTrainedTokenizer):
-    def __init__(self):
-        self.unk_token = '<unk>'
-        self.pad_token = '<pad>'
-        self.bos_token = '<s>'
-        self.eos_token = '</s>'
-        self.empty_chord = '<emp>'
-        self.csl_token = '<s>'
-        self.mask_token = '<mask>'
-        self.special_tokens = {}
-        self.start_harmony_token = '<h>'
-        self._added_tokens_encoder = {} # TODO: allow for special tokens
-        self.vocab = {
-            '<unk>': 0,
-            '<pad>': 1,
-            '<s>': 2,
-            '</s>': 3,
-            '<emp>': 4,
-            '<mask>': 5,
-            '<bar>': 6,
-            '<h>': 7
-        }
-        current_token_id = 8
-        self.time_quantization = []  # Store predefined quantized times
-
-        # Predefine time quantization tokens for a single measure
-        max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
-        for quarter in range(max_quarters):
-            for subdivision in subdivisions:
-                quant_time = round(quarter + subdivision, 3)
-                self.time_quantization.append(quant_time)  # Save for later reference
-                # Format time tokens with two-digit subdivisions
-                quarter_part = int(quant_time)
-                subdivision_part = int(round((quant_time - quarter_part) * 100))
-                time_token = f'position_{quarter_part}x{subdivision_part:02}'
-                self.vocab[time_token] = current_token_id
-                current_token_id += 1
+class GCTSymbolTokenizer(HarmonyTokenizerBase):
+    def __init__(self, **kwargs):
+        super(GCTSymbolTokenizer, self).__init__(**kwargs)
     # end init
-
-    def convert_tokens_to_ids(self, tokens):
-        if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
-        return [self.vocab[token] for token in tokens]
-    # end convert_tokens_to_ids
-
-    def convert_ids_to_tokens(self, ids):
-        if isinstance(ids, int):
-            return self.ids_to_tokens.get(ids, self.unk_token)
-        return [self.ids_to_tokens[i] for i in ids]
-    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         for file_path in tqdm(corpus, desc="Processing Files"):
@@ -1257,67 +752,6 @@ class GCTSymbolTokenizer(PreTrainedTokenizer):
                             self.vocab[tmp_token] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
-
-
-    def find_closest_quantized_time(self, offset):
-        # Find the closest predefined quantized time
-        closest_time = min(self.time_quantization, key=lambda t: abs(t - offset))
-        quarter = int(closest_time)
-        subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
-        return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
-    
-    def normalize_root_to_sharps(self, root):
-        """
-        Normalize chord roots to sharp notation, handling special cases like '-' for sharps.
-        """
-        # Custom mapping for cases like "D-" → "C#"
-        special_mapping = {
-            'C-': 'B',
-            'D-': 'C#',
-            'E-': 'D#',
-            'F-': 'E',
-            'E#': 'F',
-            'G-': 'F#',
-            'A-': 'G#',
-            'B-': 'A#',
-            'B#': 'C'
-        }
-
-        # Check if the root matches a special case
-        if root in special_mapping:
-            return special_mapping[root]
-
-        # Use music21 to normalize root to sharp notation otherwise
-        pitch_obj = pitch.Pitch(root)
-        return pitch_obj.name  # Always return the sharp representation
-
-    def get_closest_mir_eval_symbol(self, chord_symbol):
-        # get binary type representation
-        # transpose to c major
-        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
-        tc = chord_symbol.transpose(ti)
-        # make binary
-        b = np.zeros(12)
-        b[tc.pitchClasses] = 1
-        similarity_max = -1
-        key_max = '<unk>'
-        for k in EXT_MIR_QUALITIES.keys():
-            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
-            if similarity_max < tmp_similarity:
-                similarity_max = tmp_similarity
-                key_max = k
-        return key_max
-
-    def normalize_chord_symbol(self, chord_symbol):
-        """
-        Normalize a music21 chord symbol to match the predefined vocabulary.
-        """
-        # Normalize root to sharp notation
-        root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
-        quality = self.get_closest_mir_eval_symbol( chord_symbol )
-
-        # Return the normalized chord symbol
-        return f"{root}", f"{quality}"
 
     def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
@@ -1390,73 +824,16 @@ class GCTSymbolTokenizer(PreTrainedTokenizer):
             ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
-    
-
-    def fit_transform(self, corpus, add_start_harmony_token=True):
-        self.fit(corpus)
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
-
-    def __call__(self, corpus, add_start_harmony_token=True):
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
-    # end __call__
 # end class GCTSymbolTokenizer
 
-class GCTRootTypeTokenizer(PreTrainedTokenizer):
-    def __init__(self):
-        self.unk_token = '<unk>'
-        self.pad_token = '<pad>'
-        self.bos_token = '<s>'
-        self.eos_token = '</s>'
-        self.empty_chord = '<emp>'
-        self.csl_token = '<s>'
-        self.mask_token = '<mask>'
-        self.special_tokens = {}
-        self.start_harmony_token = '<h>'
-        self._added_tokens_encoder = {} # TODO: allow for special tokens
-        self.vocab = {
-            '<unk>': 0,
-            '<pad>': 1,
-            '<s>': 2,
-            '</s>': 3,
-            '<emp>': 4,
-            '<mask>': 5,
-            '<bar>': 6,
-            '<h>': 7
-        }
-        current_token_id = 8
-        self.time_quantization = []  # Store predefined quantized times
-
-        # Predefine time quantization tokens for a single measure
-        max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
-        for quarter in range(max_quarters):
-            for subdivision in subdivisions:
-                quant_time = round(quarter + subdivision, 3)
-                self.time_quantization.append(quant_time)  # Save for later reference
-                # Format time tokens with two-digit subdivisions
-                quarter_part = int(quant_time)
-                subdivision_part = int(round((quant_time - quarter_part) * 100))
-                time_token = f'position_{quarter_part}x{subdivision_part:02}'
-                self.vocab[time_token] = current_token_id
-                current_token_id += 1
+class GCTRootTypeTokenizer(HarmonyTokenizerBase):
+    def __init__(self, **kwargs):
+        super(GCTRootTypeTokenizer, self).__init__(**kwargs)
         # chord root and pitch classes
         for root in range(12):
-            self.vocab['chord_root_' + str(root)] = current_token_id
-            current_token_id += 1
+            self.vocab['chord_root_' + str(root)] = len(self.vocab)
     # end init
-
-    def convert_tokens_to_ids(self, tokens):
-        if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
-        return [self.vocab[token] for token in tokens]
-    # end convert_tokens_to_ids
-
-    def convert_ids_to_tokens(self, ids):
-        if isinstance(ids, int):
-            return self.ids_to_tokens.get(ids, self.unk_token)
-        return [self.ids_to_tokens[i] for i in ids]
-    # end convert_ids_to_tokens
 
     def fit(self, corpus):
         for file_path in tqdm(corpus, desc="Processing Files"):
@@ -1493,67 +870,6 @@ class GCTRootTypeTokenizer(PreTrainedTokenizer):
                             self.vocab[tmp_token] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
-
-
-    def find_closest_quantized_time(self, offset):
-        # Find the closest predefined quantized time
-        closest_time = min(self.time_quantization, key=lambda t: abs(t - offset))
-        quarter = int(closest_time)
-        subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
-        return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
-    
-    def normalize_root_to_sharps(self, root):
-        """
-        Normalize chord roots to sharp notation, handling special cases like '-' for sharps.
-        """
-        # Custom mapping for cases like "D-" → "C#"
-        special_mapping = {
-            'C-': 'B',
-            'D-': 'C#',
-            'E-': 'D#',
-            'F-': 'E',
-            'E#': 'F',
-            'G-': 'F#',
-            'A-': 'G#',
-            'B-': 'A#',
-            'B#': 'C'
-        }
-
-        # Check if the root matches a special case
-        if root in special_mapping:
-            return special_mapping[root]
-
-        # Use music21 to normalize root to sharp notation otherwise
-        pitch_obj = pitch.Pitch(root)
-        return pitch_obj.name  # Always return the sharp representation
-
-    def get_closest_mir_eval_symbol(self, chord_symbol):
-        # get binary type representation
-        # transpose to c major
-        ti = interval.Interval( chord_symbol.root(), pitch.Pitch('C') )
-        tc = chord_symbol.transpose(ti)
-        # make binary
-        b = np.zeros(12)
-        b[tc.pitchClasses] = 1
-        similarity_max = -1
-        key_max = '<unk>'
-        for k in EXT_MIR_QUALITIES.keys():
-            tmp_similarity = np.sum(b == EXT_MIR_QUALITIES[k])
-            if similarity_max < tmp_similarity:
-                similarity_max = tmp_similarity
-                key_max = k
-        return key_max
-
-    def normalize_chord_symbol(self, chord_symbol):
-        """
-        Normalize a music21 chord symbol to match the predefined vocabulary.
-        """
-        # Normalize root to sharp notation
-        root = self.normalize_root_to_sharps(chord_symbol.root().name)  # E.g., "Db" → "C#"
-        quality = self.get_closest_mir_eval_symbol( chord_symbol )
-
-        # Return the normalized chord symbol
-        return f"{root}", f"{quality}"
 
     def transform(self, corpus, add_start_harmony_token=True):
         tokens = []
@@ -1631,16 +947,7 @@ class GCTRootTypeTokenizer(PreTrainedTokenizer):
             ids.append(harmony_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
-    
-
-    def fit_transform(self, corpus, add_start_harmony_token=True):
-        self.fit(corpus)
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end transform
-
-    def __call__(self, corpus, add_start_harmony_token=True):
-        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
-    # end __call__
 # end class GCTRootTypeTokenizer
 
 class MelodyPitchTokenizer(PreTrainedTokenizer):
@@ -1666,14 +973,12 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
             '<mask>': 5,
             '<bar>': 6
         }
-        current_token_id = 7
         self.time_quantization = []  # Store predefined quantized times
 
         # Predefine pitch tokens for the allowed range
         for midi_pitch in range(self.min_pitch, self.max_pitch + 1):
             pitch_token = f'P:{midi_pitch}'
-            self.vocab[pitch_token] = current_token_id
-            current_token_id += 1
+            self.vocab[pitch_token] = len(self.vocab)
 
         # Predefine time quantization tokens
         max_quarters = 10  # Support up to 10/4 time signatures
@@ -1686,8 +991,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
                 quarter_part = int(quant_time)
                 subdivision_part = int(round((quant_time - quarter_part) * 100))
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
-                self.vocab[time_token] = current_token_id
-                current_token_id += 1
+                self.vocab[time_token] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
@@ -1794,7 +1098,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
             ids.append(melody_ids + [self.vocab[self.eos_token]])
 
         return {'tokens': tokens, 'ids': ids}
-    
+    # end transform
 
     def fit_transform(self, corpus):
         self.fit(corpus)
