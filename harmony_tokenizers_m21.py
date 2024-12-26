@@ -52,9 +52,9 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         }
         self.time_quantization = []  # Store predefined quantized times
 
-        # Predefine time quantization tokens for a single measure
+        # Predefine time quantization tokens for a single measure 1/16th triplets
         max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
+        subdivisions = [0, 0.16, 0.25, 0.33, 0.5, 0.66, 0.75, 0.83]
         for quarter in range(max_quarters):
             for subdivision in subdivisions:
                 quant_time = round(quarter + subdivision, 3)
@@ -218,20 +218,30 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
 
-    def transform(self, corpus):
+    def transform(self, corpus, add_start_harmony_token=True):
         # first put melody tokens
         if self.verbose > 0:
-            print('Processing melody')
-        tmp_toks_ids = self.mel_tokenizer.transform(corpus)
-        tokens = tmp_toks_ids['tokens']
-        ids = tmp_toks_ids['ids']
+            print('Processing melody') #TODO Need proper nested if/else
+        mel_toks_ids = self.mel_tokenizer.transform(corpus)
+        melody_tokens = mel_toks_ids['tokens'] 
+        melody_ids = mel_toks_ids['ids'] 
         # then concatenate harmony tokens
         if self.verbose > 0:
             print('Processing harmony')
-        tmp_toks_ids = self.harm_tokenizer.transform(corpus)
-        tokens.append(tmp_toks_ids['tokens'])
-        ids.append(tmp_toks_ids['ids'])
-        return {'tokens': tokens, 'ids': ids}
+
+        harm_toks_ids = self.harm_tokenizer.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+        harmony_tokens = harm_toks_ids['tokens']  
+        harmony_ids = harm_toks_ids['ids']   
+
+        # Combine melody and harmony tokens for each file
+        combined_tokens = []
+        combined_ids = []
+
+        for mel_tok, harm_tok, mel_id, harm_id in zip(melody_tokens, harmony_tokens, melody_ids, harmony_ids):
+            combined_tokens.append(mel_tok + harm_tok) 
+            combined_ids.append(mel_id + harm_id)    
+
+        return {'tokens': combined_tokens, 'ids': combined_ids}
     # end transform
     
 
