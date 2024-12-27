@@ -51,6 +51,7 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
             '<h>': 7
         }
         self.time_quantization = []  # Store predefined quantized times
+        self.time_signatures = []  # Store most common time signatures
 
         # Predefine time quantization tokens for a single measure 1/16th triplets
         max_quarters = 10  # Support up to 10/4 time signatures
@@ -64,7 +65,54 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
                 subdivision_part = int(round((quant_time - quarter_part) * 100))
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = len(self.vocab)
+
+        # Compute and store most popular time signatures coming from predefined time tokens
+        self.time_signatures = self.infer_time_signatures_from_quantization(self.time_quantization, max_quarters)
+
+        # Add time signature tokens to the vocabulary
+        for num, denom in self.time_signatures:
+            ts_token = f"ts_{num}x{denom}"
+            self.vocab[ts_token] = len(self.vocab)
     # end init
+
+    def infer_time_signatures_from_quantization(self, time_quantization, max_quarters=10):
+        """
+        Calculate time signatures based on the quantization scheme. Only x/4 and x/8 are
+        included. Removing duplicates like 2/4 and 4/8 keeping the simplest denominator.
+        """
+        inferred_time_signatures = set()
+
+        for measure_length in range(1, max_quarters + 1):
+            # Extract tokens within the current measure
+            measure_tokens = [t for t in time_quantization if int(t) < measure_length]
+
+            # Add `x/4` time signatures (number of quarters in the measure)
+            inferred_time_signatures.add((measure_length, 4))
+
+            # Validate all valid groupings for `x/8`
+            for numerator in range(1, measure_length * 2 + 1):  # Up to 2 eighths per quarter
+                eighth_duration = 0.5  # Fixed duration for eighth notes
+                valid_onsets = [i * eighth_duration for i in range(numerator)]
+                
+                # Check if measure_tokens contains a valid subset matching the onsets
+                if all(any(abs(t - onset) < 0.01 for t in measure_tokens) for onset in valid_onsets):
+                    inferred_time_signatures.add((numerator, 8))
+        
+        # Remove equivalent time signatures. Separate x/4 and x/8 time signatures
+        quarter_signatures = {num for num, denom in inferred_time_signatures if denom == 4}
+        cleaned_signatures = [] 
+        
+        for num, denom in inferred_time_signatures:
+            # Keep x/4 time signatures
+            if denom == 4:
+                cleaned_signatures.append((num, denom))
+            # Keep x/8 only if there's no equivalent x/4
+            elif denom == 8 and num / 2 not in quarter_signatures:
+                cleaned_signatures.append((num, denom))              
+
+        # Return sorted time signatures
+        return sorted(cleaned_signatures)
+    # end infer_time_signatures_from_quantization
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
@@ -984,6 +1032,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
             '<bar>': 6
         }
         self.time_quantization = []  # Store predefined quantized times
+        self.time_signatures = []  # Store most common time signatures
 
         # Predefine pitch tokens for the allowed range
         for midi_pitch in range(self.min_pitch, self.max_pitch + 1):
@@ -992,7 +1041,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
 
         # Predefine time quantization tokens
         max_quarters = 10  # Support up to 10/4 time signatures
-        subdivisions = [0, 0.1, 0.2, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9]
+        subdivisions = [0, 0.16, 0.25, 0.33, 0.5, 0.66, 0.75, 0.83]
         for quarter in range(max_quarters):
             for subdivision in subdivisions:
                 quant_time = round(quarter + subdivision, 3)
@@ -1002,8 +1051,55 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
                 subdivision_part = int(round((quant_time - quarter_part) * 100))
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()} #TODO check with Max
+
+        # Compute and store most popular time signatures coming from predefined time tokens
+        self.time_signatures = self.infer_time_signatures_from_quantization(self.time_quantization, max_quarters)
+
+        # Add time signature tokens to the vocabulary
+        for num, denom in self.time_signatures:
+            ts_token = f"ts_{num}x{denom}"
+            self.vocab[ts_token] = len(self.vocab)
     # end init
+
+    def infer_time_signatures_from_quantization(self, time_quantization, max_quarters=10):
+        """
+        Calculate time signatures based on the quantization scheme. Only x/4 and x/8 are
+        included. Removing duplicates like 2/4 and 4/8 keeping the simplest denominator.
+        """
+        inferred_time_signatures = set()
+
+        for measure_length in range(1, max_quarters + 1):
+            # Extract tokens within the current measure
+            measure_tokens = [t for t in time_quantization if int(t) < measure_length]
+
+            # Add `x/4` time signatures (number of quarters in the measure)
+            inferred_time_signatures.add((measure_length, 4))
+
+            # Validate all valid groupings for `x/8`
+            for numerator in range(1, measure_length * 2 + 1):  # Up to 2 eighths per quarter
+                eighth_duration = 0.5  # Fixed duration for eighth notes
+                valid_onsets = [i * eighth_duration for i in range(numerator)]
+                
+                # Check if measure_tokens contains a valid subset matching the onsets
+                if all(any(abs(t - onset) < 0.01 for t in measure_tokens) for onset in valid_onsets):
+                    inferred_time_signatures.add((numerator, 8))
+        
+        # Remove equivalent time signatures. Separate x/4 and x/8 time signatures
+        quarter_signatures = {num for num, denom in inferred_time_signatures if denom == 4}
+        cleaned_signatures = [] 
+        
+        for num, denom in inferred_time_signatures:
+            # Keep x/4 time signatures
+            if denom == 4:
+                cleaned_signatures.append((num, denom))
+            # Keep x/8 only if there's no equivalent x/4
+            elif denom == 8 and num / 2 not in quarter_signatures:
+                cleaned_signatures.append((num, denom))              
+
+        # Return sorted time signatures
+        return sorted(cleaned_signatures)
+    # end infer_time_signatures_from_quantization
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
