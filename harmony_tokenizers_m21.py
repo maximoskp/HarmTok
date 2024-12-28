@@ -6,6 +6,8 @@ import mir_eval
 from copy import deepcopy
 import numpy as np
 from GCT_functions import get_singe_GCT_of_chord as gct
+import os
+import json
 
 INT_TO_ROOT_SHARP = {
     0: 'C',
@@ -29,7 +31,7 @@ for k in list(MIR_QUALITIES.keys()) + ['7(b9)', '7(#9)', '7(#11)', '7(b13)']:
     EXT_MIR_QUALITIES[k] = semitone_bitmap
 
 class HarmonyTokenizerBase(PreTrainedTokenizer):
-    def __init__(self):
+    def __init__(self, vocab=None, special_tokens=None, **kwargs):
         self.unk_token = '<unk>'
         self.pad_token = '<pad>'
         self.bos_token = '<s>'
@@ -39,17 +41,29 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         self.mask_token = '<mask>'
         self.special_tokens = {}
         self.start_harmony_token = '<h>'
-        self._added_tokens_encoder = {} # TODO: allow for special tokens
-        self.vocab = {
-            '<unk>': 0,
-            '<pad>': 1,
-            '<s>': 2,
-            '</s>': 3,
-            '<emp>': 4,
-            '<mask>': 5,
-            '<bar>': 6,
-            '<h>': 7
-        }
+        if vocab is not None:
+            self.vocab = vocab
+        else:
+            self.vocab = {
+                '<unk>': 0,
+                '<pad>': 1,
+                '<s>': 2,
+                '</s>': 3,
+                '<emp>': 4,
+                '<mask>': 5,
+                '<bar>': 6,
+                '<h>': 7
+            }
+            self.construct_basic_dictionary()
+        if special_tokens is not None:
+            self.special_tokens = special_tokens
+            self._added_tokens_encoder = {}
+        else:
+            self.special_tokens = {} # not really needed in this implementation
+            self._added_tokens_encoder = {} # TODO: allow for special tokens
+    # end init
+
+    def construct_basic_dictionary(self):
         self.time_quantization = []  # Store predefined quantized times
         self.time_signatures = []  # Store most common time signatures
 
@@ -73,7 +87,7 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         for num, denom in self.time_signatures:
             ts_token = f"ts_{num}x{denom}"
             self.vocab[ts_token] = len(self.vocab)
-    # end init
+    # end construct_basic_dictionary
 
     def infer_time_signatures_from_quantization(self, time_quantization, max_quarters=10):
         """
@@ -207,12 +221,51 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
 
+    def save_pretrained(self, save_directory):
+        if not os.path.exists(save_directory):
+            os.makedirs(save_directory)
+        
+        # Save vocabulary
+        vocab_file = os.path.join(save_directory, "vocab.json")
+        with open(vocab_file, "w", encoding="utf-8") as f:
+            json.dump(self.vocab, f, ensure_ascii=False, indent=2)
+
+        # Save special tokens and configuration
+        config_file = os.path.join(save_directory, "tokenizer_config.json")
+        config = {"special_tokens": self.special_tokens}
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+    # end save_pretrained
+
+    @classmethod
+    def from_pretrained(cls, load_directory):
+        # Load vocabulary
+        vocab_file = os.path.join(load_directory, "vocab.json")
+        with open(vocab_file, "r", encoding="utf-8") as f:
+            vocab = json.load(f)
+
+        # Load special tokens and configuration
+        config_file = os.path.join(load_directory, "tokenizer_config.json")
+        with open(config_file, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        
+        special_tokens = config.get("special_tokens", {})
+        
+        # Create a new tokenizer instance
+        return cls(vocab, special_tokens)
+    # end from_pretrained
+
 # end class HarmonyTokenizerBase
 
 class MergedMelHarmTokenizer(PreTrainedTokenizer):
     def __init__(self, mel_tokenizer, harm_tokenizer, verbose=0):
-        self.mel_tokenizer = mel_tokenizer
-        self.harm_tokenizer = harm_tokenizer
+        '''
+        There is only one way to initialize this tokenizer:
+        By providing two tokenizer objects that have been loaded beforehand.
+        There is no save_pretrained or load_pretrained.
+        '''
+        self.melody_tokenizer = mel_tokenizer
+        self.harmony_tokenizer = harm_tokenizer
         self.verbose = verbose
         self.unk_token = '<unk>'
         self.pad_token = '<pad>'
@@ -253,16 +306,16 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
     def fit(self, corpus):
         if self.verbose > 0:
             print('Training melody tokenizer')
-        self.mel_tokenizer.fit(corpus)
+        self.melody_tokenizer.fit(corpus)
         if self.verbose > 0:
             print('Merging melody vocab')
-        self.merge_dict_to_vocab(self.mel_tokenizer.vocab)
+        self.merge_dict_to_vocab(self.melody_tokenizer.vocab)
         if self.verbose > 0:
             print('Training harmony tokenizer')
-        self.harm_tokenizer.fit(corpus)
+        self.harmony_tokenizer.fit(corpus)
         if self.verbose > 0:
             print('Merging harmony vocab')
-        self.merge_dict_to_vocab(self.harm_tokenizer.vocab)
+        self.merge_dict_to_vocab(self.harmony_tokenizer.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
 
@@ -270,14 +323,14 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         # first put melody tokens
         if self.verbose > 0:
             print('Processing melody') #TODO Need proper nested if/else
-        mel_toks_ids = self.mel_tokenizer.transform(corpus)
+        mel_toks_ids = self.melody_tokenizer.transform(corpus)
         melody_tokens = mel_toks_ids['tokens'] 
         melody_ids = mel_toks_ids['ids'] 
         # then concatenate harmony tokens
         if self.verbose > 0:
             print('Processing harmony')
 
-        harm_toks_ids = self.harm_tokenizer.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+        harm_toks_ids = self.harmony_tokenizer.transform(corpus, add_start_harmony_token=add_start_harmony_token)
         harmony_tokens = harm_toks_ids['tokens']  
         harmony_ids = harm_toks_ids['ids']   
 
@@ -291,7 +344,6 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
 
         return {'tokens': combined_tokens, 'ids': combined_ids}
     # end transform
-    
 
     def fit_transform(self, corpus):
         self.fit(corpus)
@@ -301,28 +353,31 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
+    
 # end class MergedMelHarmTokenizer
 
 class ChordSymbolTokenizer(HarmonyTokenizerBase):
-    def __init__(self, **kwargs):
-        super(ChordSymbolTokenizer, self).__init__(**kwargs)
-        # Generate chord tokens dynamically, forcing sharp notation
-        chromatic_roots = []
-        for i in range(12):
-            pitch_obj = pitch.Pitch(i)
-            # Convert flat notation to sharp
-            if '-' in pitch_obj.name:  # Check for flats
-                pitch_obj = pitch_obj.getEnharmonic()  # Convert to sharp
-            chromatic_roots.append(pitch_obj.name)  # Use sharp representation
+    def __init__(self, vocab=None, special_tokens=None, **kwargs):
+        super(ChordSymbolTokenizer, self).__init__(vocab=vocab, special_tokens=special_tokens, **kwargs)
+        # if vocab is not None, the vocabulary should be already ok
+        if vocab is None:
+            # Generate chord tokens dynamically, forcing sharp notation
+            chromatic_roots = []
+            for i in range(12):
+                pitch_obj = pitch.Pitch(i)
+                # Convert flat notation to sharp
+                if '-' in pitch_obj.name:  # Check for flats
+                    pitch_obj = pitch_obj.getEnharmonic()  # Convert to sharp
+                chromatic_roots.append(pitch_obj.name)  # Use sharp representation
 
-        qualities = list(EXT_MIR_QUALITIES.keys())
+            qualities = list(EXT_MIR_QUALITIES.keys())
 
-        for root in chromatic_roots:
-            for quality in qualities:
-                    chord_token = f'{root}:{quality}'
-                    #print(chord_token)
-                    self.vocab[chord_token] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+            for root in chromatic_roots:
+                for quality in qualities:
+                        chord_token = f'{root}:{quality}'
+                        #print(chord_token)
+                        self.vocab[chord_token] = len(self.vocab)
+            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
     def fit(self, corpus):
@@ -395,29 +450,32 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
 
         return {'tokens': tokens, 'ids': ids}
     # end transform
+
 # end class ChordSymbolTokenizer
 
 class RootTypeTokenizer(HarmonyTokenizerBase):
-    def __init__(self, **kwargs):
-        super(RootTypeTokenizer, self).__init__(**kwargs)
-        # Generate chord tokens dynamically, forcing sharp notation
-        chromatic_roots = []
-        for i in range(12):
-            pitch_obj = pitch.Pitch(i)
-            # Convert flat notation to sharp
-            if '-' in pitch_obj.name:  # Check for flats
-                pitch_obj = pitch_obj.getEnharmonic()  # Convert to sharp
-            chromatic_roots.append(pitch_obj.name)  # Use sharp representation
+    def __init__(self, vocab=None, special_tokens=None, **kwargs):
+        super(RootTypeTokenizer, self).__init__(vocab=vocab, special_tokens=special_tokens, **kwargs)
+        # if vocab is not None, the vocabulary should be already ok
+        if vocab is None:
+            # Generate chord tokens dynamically, forcing sharp notation
+            chromatic_roots = []
+            for i in range(12):
+                pitch_obj = pitch.Pitch(i)
+                # Convert flat notation to sharp
+                if '-' in pitch_obj.name:  # Check for flats
+                    pitch_obj = pitch_obj.getEnharmonic()  # Convert to sharp
+                chromatic_roots.append(pitch_obj.name)  # Use sharp representation
 
-        qualities = list(EXT_MIR_QUALITIES.keys())
+            qualities = list(EXT_MIR_QUALITIES.keys())
 
-        for root in chromatic_roots:
-            self.vocab[ root ] = len(self.vocab)
-        for quality in qualities:
-                quality_token = f'{quality}'
-                #print(chord_token)
-                self.vocab[quality_token] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+            for root in chromatic_roots:
+                self.vocab[ root ] = len(self.vocab)
+            for quality in qualities:
+                    quality_token = f'{quality}'
+                    #print(chord_token)
+                    self.vocab[quality_token] = len(self.vocab)
+            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
     def fit(self, corpus):
@@ -501,15 +559,18 @@ class RootTypeTokenizer(HarmonyTokenizerBase):
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
+
 # end class RootTypeTokenizer
 
 class PitchClassTokenizer(HarmonyTokenizerBase):
-    def __init__(self, **kwargs):
-        super(PitchClassTokenizer, self).__init__(**kwargs)
-        # chord pitch classes
-        for pc in range(12):
-            self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+    def __init__(self, vocab=None, special_tokens=None, **kwargs):
+        super(PitchClassTokenizer, self).__init__(vocab=vocab, special_tokens=special_tokens, **kwargs)
+        # if vocab is not None, the vocabulary should be already ok
+        if vocab is None:
+            # chord pitch classes
+            for pc in range(12):
+                self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
+            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
     def fit(self, corpus):
@@ -589,17 +650,20 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
+
 # end class PitchClassTokenizer
 
 class RootPCTokenizer(HarmonyTokenizerBase):
-    def __init__(self, **kwargs):
-        super(RootPCTokenizer, self).__init__(**kwargs)
-        # chord root and pitch classes
-        for root in range(12):
-            self.vocab['chord_root_' + str(root)] = len(self.vocab)
-        for pc in range(12):
-            self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+    def __init__(self, vocab=None, special_tokens=None, **kwargs):
+        super(RootPCTokenizer, self).__init__(vocab=vocab, special_tokens=special_tokens, **kwargs)
+        # if vocab is not None, the vocabulary should be already ok
+        if vocab is None:
+            # chord root and pitch classes
+            for root in range(12):
+                self.vocab['chord_root_' + str(root)] = len(self.vocab)
+            for pc in range(12):
+                self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
+            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
     def transform(self, corpus, add_start_harmony_token=True):
@@ -675,17 +739,20 @@ class RootPCTokenizer(HarmonyTokenizerBase):
 
         return {'tokens': tokens, 'ids': ids}
     # end transform
+
 # end class RootPCTokenizer
 
 class GCTRootPCTokenizer(HarmonyTokenizerBase):
-    def __init__(self, **kwargs):
-        super(GCTRootPCTokenizer, self).__init__(**kwargs)
-        # chord root and pitch classes
-        for root in range(12):
-            self.vocab['chord_root_' + str(root)] = len(self.vocab)
-        for pc in range(12):
-            self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+    def __init__(self, vocab=None, special_tokens=None, **kwargs):
+        super(GCTRootPCTokenizer, self).__init__(vocab=vocab, special_tokens=special_tokens, **kwargs)
+        # if vocab is not None, the vocabulary should be already ok
+        if vocab is None:
+            # chord root and pitch classes
+            for root in range(12):
+                self.vocab['chord_root_' + str(root)] = len(self.vocab)
+            for pc in range(12):
+                self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
+            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
     def fit(self, corpus):
@@ -768,11 +835,12 @@ class GCTRootPCTokenizer(HarmonyTokenizerBase):
 
         return {'tokens': tokens, 'ids': ids}
     # end transform
+
 # end class GCTRootPCTokenizer
 
 class GCTSymbolTokenizer(HarmonyTokenizerBase):
-    def __init__(self, **kwargs):
-        super(GCTSymbolTokenizer, self).__init__(**kwargs)
+    def __init__(self, vocab=None, special_tokens=None, **kwargs):
+        super(GCTSymbolTokenizer, self).__init__(vocab=vocab, special_tokens=special_tokens, **kwargs)
     # end init
 
     def fit(self, corpus):
@@ -883,14 +951,17 @@ class GCTSymbolTokenizer(HarmonyTokenizerBase):
 
         return {'tokens': tokens, 'ids': ids}
     # end transform
+
 # end class GCTSymbolTokenizer
 
 class GCTRootTypeTokenizer(HarmonyTokenizerBase):
-    def __init__(self, **kwargs):
-        super(GCTRootTypeTokenizer, self).__init__(**kwargs)
-        # chord root and pitch classes
-        for root in range(12):
-            self.vocab['chord_root_' + str(root)] = len(self.vocab)
+    def __init__(self, vocab=None, special_tokens=None, **kwargs):
+        super(GCTRootTypeTokenizer, self).__init__(vocab=vocab, special_tokens=special_tokens, **kwargs)
+        # if vocab is not None, the vocabulary should be already ok
+        if vocab is None:
+            # chord root and pitch classes
+            for root in range(12):
+                self.vocab['chord_root_' + str(root)] = len(self.vocab)
     # end init
 
     def fit(self, corpus):
@@ -1006,10 +1077,11 @@ class GCTRootTypeTokenizer(HarmonyTokenizerBase):
 
         return {'tokens': tokens, 'ids': ids}
     # end transform
+
 # end class GCTRootTypeTokenizer
 
 class MelodyPitchTokenizer(PreTrainedTokenizer):
-    def __init__(self, min_pitch=21, max_pitch=108):
+    def __init__(self, vocab=None, special_tokens=None, min_pitch=21, max_pitch=108):
         """
         Initialize the melody tokenizer with a configurable pitch range.
         """
@@ -1018,10 +1090,22 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         self.bos_token = '<s>'
         self.eos_token = '</s>'
         self.mask_token = '<mask>'
-        self.special_tokens = {}
         self.csl_token = '<s>'
         self.min_pitch = min_pitch  # Minimum MIDI pitch value (e.g., 21 for A0)
         self.max_pitch = max_pitch  # Maximum MIDI pitch value (e.g., 108 for C8)
+        if vocab is not None:
+            self.vocab = vocab
+        else:
+            self.construct_basic_vocab()
+        if special_tokens is not None:
+            self.special_tokens = special_tokens
+            self._added_tokens_encoder = {}
+        else:
+            self.special_tokens = {} # not really needed in this implementation
+            self._added_tokens_encoder = {}
+    # end init
+
+    def construct_basic_vocab(self):
         self.vocab = {
             '<unk>': 0,
             '<pad>': 1,
@@ -1060,7 +1144,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         for num, denom in self.time_signatures:
             ts_token = f"ts_{num}x{denom}"
             self.vocab[ts_token] = len(self.vocab)
-    # end init
+    # end construct_basic_vocab
 
     def infer_time_signatures_from_quantization(self, time_quantization, max_quarters=10):
         """
@@ -1214,4 +1298,39 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
     def __call__(self, corpus):
         return self.transform(corpus)
     # end __call__
+
+    def save_pretrained(self, save_directory):
+        if not os.path.exists(save_directory):
+            os.makedirs(save_directory)
+        
+        # Save vocabulary
+        vocab_file = os.path.join(save_directory, "vocab.json")
+        with open(vocab_file, "w", encoding="utf-8") as f:
+            json.dump(self.vocab, f, ensure_ascii=False, indent=2)
+
+        # Save special tokens and configuration
+        config_file = os.path.join(save_directory, "tokenizer_config.json")
+        config = {"special_tokens": self.special_tokens}
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+    # end save_pretrained
+
+    @classmethod
+    def from_pretrained(cls, load_directory):
+        # Load vocabulary
+        vocab_file = os.path.join(load_directory, "vocab.json")
+        with open(vocab_file, "r", encoding="utf-8") as f:
+            vocab = json.load(f)
+
+        # Load special tokens and configuration
+        config_file = os.path.join(load_directory, "tokenizer_config.json")
+        with open(config_file, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        
+        special_tokens = config.get("special_tokens", {})
+        
+        # Create a new tokenizer instance
+        return cls(vocab, special_tokens)
+    # end from_pretrained
+
 # end class MelodyPitchTokenizer
