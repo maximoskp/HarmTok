@@ -41,10 +41,19 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         self.mask_token = '<mask>'
         self.special_tokens = {}
         self.start_harmony_token = '<h>'
+        self.construct_basic_vocab()
         if vocab is not None:
             self.vocab = vocab
+        if special_tokens is not None:
+            self.special_tokens = special_tokens
+            self._added_tokens_encoder = {}
         else:
-            self.vocab = {
+            self.special_tokens = {} # not really needed in this implementation
+            self._added_tokens_encoder = {} # TODO: allow for special tokens
+    # end init
+
+    def construct_basic_vocab(self):
+        self.vocab = {
                 '<unk>': 0,
                 '<pad>': 1,
                 '<s>': 2,
@@ -54,16 +63,6 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
                 '<bar>': 6,
                 '<h>': 7
             }
-            self.construct_basic_dictionary()
-        if special_tokens is not None:
-            self.special_tokens = special_tokens
-            self._added_tokens_encoder = {}
-        else:
-            self.special_tokens = {} # not really needed in this implementation
-            self._added_tokens_encoder = {} # TODO: allow for special tokens
-    # end init
-
-    def construct_basic_dictionary(self):
         self.time_quantization = []  # Store predefined quantized times
         self.time_signatures = []  # Store most common time signatures
 
@@ -87,7 +86,7 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         for num, denom in self.time_signatures:
             ts_token = f"ts_{num}x{denom}"
             self.vocab[ts_token] = len(self.vocab)
-    # end construct_basic_dictionary
+    # end construct_basic_vocab
 
     def infer_time_signatures_from_quantization(self, time_quantization, max_quarters=10):
         """
@@ -205,12 +204,99 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
     # end normalize_chord_symbol
 
     def fit(self, corpus):
-        raise NotImplementedError()
+        pass
     # end fit
 
     def transform(self, corpus, add_start_harmony_token=True):
-        raise NotImplementedError()
-    # end fit
+        tokens = []
+        ids = []
+        for file_path in tqdm(corpus, desc="Processing Files"):
+            encoded = self.encode(file_path, add_start_harmony_token=add_start_harmony_token)
+            harmony_tokens = encoded['input_tokens']
+            harmony_ids = encoded['input_ids']
+            tokens.append(harmony_tokens + [self.eos_token])
+            ids.append(harmony_ids + [self.vocab[self.eos_token]])
+        return {'tokens': tokens, 'ids': ids}
+    # end transform
+
+    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right'):
+        unk_count = 0  # Counter to track '<unk>' tokens for the current file
+        score = converter.parse(file_path)
+        part = score.parts[0]  # Assume lead sheet
+        measures = list(part.getElementsByClass('Measure'))
+        harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
+
+        # Create a mapping of measures to their quarter lengths
+        measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
+
+        if add_start_harmony_token:
+            harmony_tokens = [self.start_harmony_token]
+            harmony_ids = [self.vocab[self.start_harmony_token]]
+        else:
+            harmony_tokens = [self.bos_token]
+            harmony_ids = [self.vocab[self.bos_token]]
+
+        # Ensure every measure (even empty ones) generates tokens
+        for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
+            # Add a "bar" token for each measure
+            harmony_tokens.append('<bar>')
+            harmony_ids.append(self.vocab['<bar>'])
+
+            # Get all chord symbols within the current measure
+            chords_in_measure = [
+                h for h in harmony_stream if measure_offset <= h.offset < measure_offset + quarter_length
+            ]
+
+            # If the measure is empty, continue to the next measure
+            if not chords_in_measure:
+                continue
+
+            # Process each chord in the current measure
+            for h in chords_in_measure:
+                # Quantize time relative to the measure
+                quant_time = h.offset - measure_offset
+                time_token = self.find_closest_quantized_time(quant_time)
+
+                harmony_tokens.append(time_token)
+                harmony_ids.append(self.vocab[time_token])
+
+                # Normalize and add the chord symbol
+                root_token, type_token = self.normalize_chord_symbol(h)
+                chord_token = root_token + ':' + type_token
+                if chord_token in self.vocab:
+                    harmony_tokens.append(chord_token)
+                    harmony_ids.append(self.vocab[chord_token])
+                else:
+                    # Handle unknown chords
+                    harmony_tokens.append('<unk>')
+                    harmony_ids.append(self.vocab['<unk>'])
+                    unk_count += 1
+        
+        attention_mask = [1]*len(harmony_ids)
+
+        # Print a message if unknown tokens were generated for the current file
+        if verbose > 0 and unk_count > 0:
+            print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
+        if max_length is not None:
+            harmony_tokens = harmony_tokens[:max_length]
+            harmony_ids = harmony_ids[:max_length]
+            attention_mask = [1]*len(harmony_ids)
+            if max_length > len(harmony_tokens) and pad_to_max_length:
+                if padding_side == 'right':
+                    harmony_tokens = harmony_tokens + (max_length-len(harmony_tokens))*[self.pad_token]
+                    harmony_ids = harmony_ids + (max_length-len(harmony_ids))*[self.vocab[self.pad_token]]
+                    attention_mask = attention_mask + (max_length-len(attention_mask))*[0]
+                else:
+                    harmony_tokens =  (max_length-len(harmony_tokens))*[self.pad_token] + harmony_tokens
+                    harmony_ids = (max_length-len(harmony_ids))*[self.vocab[self.pad_token]] + harmony_ids
+                    attention_mask = (max_length-len(attention_mask))*[0] + attention_mask
+        # TODO: return overflowing tokens
+        return {
+            'input_tokens': harmony_tokens,
+            'input_ids': harmony_ids,
+            'attention_mask': attention_mask
+        }
+    # end encode
 
     def fit_transform(self, corpus, add_start_harmony_token=True):
         self.fit(corpus)
@@ -319,6 +405,35 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
 
+    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, pad_melody=False, padding_side='right'):
+        # first put melody tokens
+        if self.verbose > 0:
+            print('Processing melody') #TODO Need proper nested if/else
+        mel_encoded = self.melody_tokenizer.encode(file_path, max_length=None if max_length is None else max_length//2, pad_to_max_length=pad_melody)
+        melody_tokens = mel_encoded['input_tokens'] 
+        melody_ids = mel_encoded['input_ids']
+        melody_attention_mask = mel_encoded['attention_mask']
+        # then concatenate harmony tokens
+        if self.verbose > 0:
+            print('Processing harmony')
+
+        harm_encoded = self.harmony_tokenizer.encode(file_path, add_start_harmony_token=add_start_harmony_token, max_length=None if max_length is None else max_length-len(melody_tokens), pad_to_max_length=pad_to_max_length)
+        harmony_tokens = harm_encoded['input_tokens'] 
+        harmony_ids = harm_encoded['input_ids']
+        harmony_attention_mask = harm_encoded['attention_mask']
+
+        # Combine melody and harmony tokens for each file
+        combined_tokens = melody_tokens + harmony_tokens
+        combined_ids = melody_ids + harmony_ids
+        combined_attention_mask = melody_attention_mask + harmony_attention_mask
+
+        return {
+            'input_tokens': combined_tokens,
+            'input_ids': combined_ids,
+            'attention_mask': combined_attention_mask
+        }
+    # end encode
+
     def transform(self, corpus, add_start_harmony_token=True):
         # first put melody tokens
         if self.verbose > 0:
@@ -380,76 +495,9 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
-    def fit(self, corpus):
-        pass
-    # end fit
-
-    def transform(self, corpus, add_start_harmony_token=True):
-        tokens = []
-        ids = []
-
-        for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track '<unk>' tokens for the current file
-            score = converter.parse(file_path)
-            part = score.parts[0]  # Assume lead sheet
-            measures = list(part.getElementsByClass('Measure'))
-            harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
-
-            # Create a mapping of measures to their quarter lengths
-            measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
-
-            if add_start_harmony_token:
-                harmony_tokens = [self.start_harmony_token]
-                harmony_ids = [self.vocab[self.start_harmony_token]]
-            else:
-                harmony_tokens = [self.bos_token]
-                harmony_ids = [self.vocab[self.bos_token]]
-
-            # Ensure every measure (even empty ones) generates tokens
-            for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
-                # Add a "bar" token for each measure
-                harmony_tokens.append('<bar>')
-                harmony_ids.append(self.vocab['<bar>'])
-
-                # Get all chord symbols within the current measure
-                chords_in_measure = [
-                    h for h in harmony_stream if measure_offset <= h.offset < measure_offset + quarter_length
-                ]
-
-                # If the measure is empty, continue to the next measure
-                if not chords_in_measure:
-                    continue
-
-                # Process each chord in the current measure
-                for h in chords_in_measure:
-                    # Quantize time relative to the measure
-                    quant_time = h.offset - measure_offset
-                    time_token = self.find_closest_quantized_time(quant_time)
-
-                    harmony_tokens.append(time_token)
-                    harmony_ids.append(self.vocab[time_token])
-
-                    # Normalize and add the chord symbol
-                    root_token, type_token = self.normalize_chord_symbol(h)
-                    chord_token = root_token + ':' + type_token
-                    if chord_token in self.vocab:
-                        harmony_tokens.append(chord_token)
-                        harmony_ids.append(self.vocab[chord_token])
-                    else:
-                        # Handle unknown chords
-                        harmony_tokens.append('<unk>')
-                        harmony_ids.append(self.vocab['<unk>'])
-                        unk_count += 1  
-
-            # Print a message if unknown tokens were generated for the current file
-            if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
-
-            tokens.append(harmony_tokens + [self.eos_token])
-            ids.append(harmony_ids + [self.vocab[self.eos_token]])
-
-        return {'tokens': tokens, 'ids': ids}
-    # end transform
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+    # end __call__
 
 # end class ChordSymbolTokenizer
 
@@ -478,84 +526,6 @@ class RootTypeTokenizer(HarmonyTokenizerBase):
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
-    def fit(self, corpus):
-        pass
-    # end fit
-    
-    def transform(self, corpus, add_start_harmony_token=True):
-        tokens = []
-        ids = []
-
-        for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track '<unk>' tokens for the current file
-            score = converter.parse(file_path)
-            part = score.parts[0]  # Assume lead sheet
-            measures = list(part.getElementsByClass('Measure'))
-            harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
-
-            # Create a mapping of measures to their quarter lengths
-            measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
-
-            if add_start_harmony_token:
-                harmony_tokens = [self.start_harmony_token]
-                harmony_ids = [self.vocab[self.start_harmony_token]]
-            else:
-                harmony_tokens = [self.bos_token]
-                harmony_ids = [self.vocab[self.bos_token]]
-
-            # Ensure every measure (even empty ones) generates tokens
-            for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
-                # Add a "bar" token for each measure
-                harmony_tokens.append('<bar>')
-                harmony_ids.append(self.vocab['<bar>'])
-
-                # Get all chord symbols within the current measure
-                chords_in_measure = [
-                    h for h in harmony_stream if measure_offset <= h.offset < measure_offset + quarter_length
-                ]
-
-                # If the measure is empty, continue to the next measure
-                if not chords_in_measure:
-                    continue
-
-                # Process each chord in the current measure
-                for h in chords_in_measure:
-                    # Quantize time relative to the measure
-                    quant_time = h.offset - measure_offset
-                    time_token = self.find_closest_quantized_time(quant_time)
-
-                    harmony_tokens.append(time_token)
-                    harmony_ids.append(self.vocab[time_token])
-
-                    # Normalize and add the chord symbol
-                    root_token, type_token = self.normalize_chord_symbol(h)
-                    if root_token in self.vocab:
-                        harmony_tokens.append(root_token)
-                        harmony_ids.append(self.vocab[root_token])
-                    else:
-                        # Handle unknown chords
-                        harmony_tokens.append('<unk>')
-                        harmony_ids.append(self.vocab['<unk>'])
-                        unk_count += 1
-                    if type_token in self.vocab:
-                        harmony_tokens.append(type_token)
-                        harmony_ids.append(self.vocab[type_token])
-                    else:
-                        # Handle unknown chords
-                        harmony_tokens.append('<unk>')
-                        harmony_ids.append(self.vocab['<unk>'])
-                        unk_count += 1  
-
-            # Print a message if unknown tokens were generated for the current file
-            if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
-
-            tokens.append(harmony_tokens + [self.eos_token])
-            ids.append(harmony_ids + [self.vocab[self.eos_token]])
-
-        return {'tokens': tokens, 'ids': ids}
-    # end transform
-
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
@@ -572,80 +542,6 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
                 self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
-
-    def fit(self, corpus):
-        pass
-    # end fit
-
-    def transform(self, corpus, add_start_harmony_token=True):
-        tokens = []
-        ids = []
-
-        for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track '<unk>' tokens for the current file
-            score = converter.parse(file_path)
-            part = score.parts[0]  # Assume lead sheet
-            measures = list(part.getElementsByClass('Measure'))
-            harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
-
-            # Create a mapping of measures to their quarter lengths
-            measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
-
-            if add_start_harmony_token:
-                harmony_tokens = [self.start_harmony_token]
-                harmony_ids = [self.vocab[self.start_harmony_token]]
-            else:
-                harmony_tokens = [self.bos_token]
-                harmony_ids = [self.vocab[self.bos_token]]
-
-            # Ensure every measure (even empty ones) generates tokens
-            for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
-                # Add a "bar" token for each measure
-                harmony_tokens.append('<bar>')
-                harmony_ids.append(self.vocab['<bar>'])
-
-                # Get all chord symbols within the current measure
-                chords_in_measure = [
-                    h for h in harmony_stream if measure_offset <= h.offset < measure_offset + quarter_length
-                ]
-
-                # If the measure is empty, continue to the next measure
-                if not chords_in_measure:
-                    continue
-
-                # Process each chord in the current measure
-                for h in chords_in_measure:
-                    # Quantize time relative to the measure
-                    quant_time = h.offset - measure_offset
-                    time_token = self.find_closest_quantized_time(quant_time)
-
-                    harmony_tokens.append(time_token)
-                    harmony_ids.append(self.vocab[time_token])
-
-                    # Normalize and add the chord symbol
-                    root_token, type_token = self.normalize_chord_symbol(h)
-                    if type_token in EXT_MIR_QUALITIES:
-                        root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
-                        pcs = (root_pc + np.where(bmap > 0)[0])%12
-                        for pc in pcs:
-                            tmp_token = 'chord_pc_' + str(pc)
-                            harmony_tokens.append( tmp_token )
-                            harmony_ids.append(self.vocab[ tmp_token ])
-                    else:
-                        # Handle unknown chords
-                        harmony_tokens.append('<unk>')
-                        harmony_ids.append(self.vocab['<unk>'])
-                        unk_count += 1
-
-            # Print a message if unknown tokens were generated for the current file
-            if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
-
-            tokens.append(harmony_tokens + [self.eos_token])
-            ids.append(harmony_ids + [self.vocab[self.eos_token]])
-
-        return {'tokens': tokens, 'ids': ids}
-    # end transform
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -666,79 +562,9 @@ class RootPCTokenizer(HarmonyTokenizerBase):
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
-    def transform(self, corpus, add_start_harmony_token=True):
-        tokens = []
-        ids = []
-
-        for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track '<unk>' tokens for the current file
-            score = converter.parse(file_path)
-            part = score.parts[0]  # Assume lead sheet
-            measures = list(part.getElementsByClass('Measure'))
-            harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
-
-            # Create a mapping of measures to their quarter lengths
-            measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
-
-            if add_start_harmony_token:
-                harmony_tokens = [self.start_harmony_token]
-                harmony_ids = [self.vocab[self.start_harmony_token]]
-            else:
-                harmony_tokens = [self.bos_token]
-                harmony_ids = [self.vocab[self.bos_token]]
-
-            # Ensure every measure (even empty ones) generates tokens
-            for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
-                # Add a "bar" token for each measure
-                harmony_tokens.append('<bar>')
-                harmony_ids.append(self.vocab['<bar>'])
-
-                # Get all chord symbols within the current measure
-                chords_in_measure = [
-                    h for h in harmony_stream if measure_offset <= h.offset < measure_offset + quarter_length
-                ]
-
-                # If the measure is empty, continue to the next measure
-                if not chords_in_measure:
-                    continue
-
-                # Process each chord in the current measure
-                for h in chords_in_measure:
-                    # Quantize time relative to the measure
-                    quant_time = h.offset - measure_offset
-                    time_token = self.find_closest_quantized_time(quant_time)
-
-                    harmony_tokens.append(time_token)
-                    harmony_ids.append(self.vocab[time_token])
-
-                    # Normalize and add the chord symbol
-                    root_token, type_token = self.normalize_chord_symbol(h)
-                    if type_token in EXT_MIR_QUALITIES:
-                        root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
-                        pcs = (root_pc + np.where(bmap > 0)[0])%12
-                        tmp_token = 'chord_root_' + str(root_pc)
-                        harmony_tokens.append( tmp_token )
-                        harmony_ids.append(self.vocab[ tmp_token ])
-                        for pc in pcs:
-                            if pc != root_pc:
-                                tmp_token = 'chord_pc_' + str(pc)
-                                harmony_tokens.append( tmp_token )
-                                harmony_ids.append(self.vocab[ tmp_token ])
-                    else:
-                        # Handle unknown chords
-                        harmony_tokens.append('<unk>')
-                        harmony_ids.append(self.vocab['<unk>'])
-                        unk_count += 1
-
-            # Print a message if unknown tokens were generated for the current file
-            if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
-
-            tokens.append(harmony_tokens + [self.eos_token])
-            ids.append(harmony_ids + [self.vocab[self.eos_token]])
-
-        return {'tokens': tokens, 'ids': ids}
-    # end transform
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+    # end __call__
 
 # end class RootPCTokenizer
 
@@ -755,86 +581,9 @@ class GCTRootPCTokenizer(HarmonyTokenizerBase):
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end init
 
-    def fit(self, corpus):
-        pass
-    # end fit
-
-    def transform(self, corpus, add_start_harmony_token=True):
-        tokens = []
-        ids = []
-
-        for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track '<unk>' tokens for the current file
-            score = converter.parse(file_path)
-            part = score.parts[0]  # Assume lead sheet
-            measures = list(part.getElementsByClass('Measure'))
-            harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
-
-            # Create a mapping of measures to their quarter lengths
-            measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
-
-            if add_start_harmony_token:
-                harmony_tokens = [self.start_harmony_token]
-                harmony_ids = [self.vocab[self.start_harmony_token]]
-            else:
-                harmony_tokens = [self.bos_token]
-                harmony_ids = [self.vocab[self.bos_token]]
-
-            # Ensure every measure (even empty ones) generates tokens
-            for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
-                # Add a "bar" token for each measure
-                harmony_tokens.append('<bar>')
-                harmony_ids.append(self.vocab['<bar>'])
-
-                # Get all chord symbols within the current measure
-                chords_in_measure = [
-                    h for h in harmony_stream if measure_offset <= h.offset < measure_offset + quarter_length
-                ]
-
-                # If the measure is empty, continue to the next measure
-                if not chords_in_measure:
-                    continue
-
-                # Process each chord in the current measure
-                for h in chords_in_measure:
-                    # Quantize time relative to the measure
-                    quant_time = h.offset - measure_offset
-                    time_token = self.find_closest_quantized_time(quant_time)
-
-                    harmony_tokens.append(time_token)
-                    harmony_ids.append(self.vocab[time_token])
-
-                    # Normalize and add the chord symbol
-                    root_token, type_token = self.normalize_chord_symbol(h)
-                    if type_token in EXT_MIR_QUALITIES:
-                        root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
-                        pcs = (root_pc + np.where(bmap > 0)[0])%12
-                        # get gct
-                        g = gct( pcs )
-                        # get root pc
-                        tmp_token = 'chord_root_' + str( g[0] )
-                        harmony_tokens.append( tmp_token )
-                        harmony_ids.append(self.vocab[ tmp_token ])
-                        # get pitch classes from mir_eval
-                        for pc in g[2:]:
-                            tmp_token = 'chord_pc_' + str((pc+g[0])%12)
-                            harmony_tokens.append( tmp_token )
-                            harmony_ids.append(self.vocab[ tmp_token ])
-                    else:
-                        # Handle unknown chords
-                        harmony_tokens.append('<unk>')
-                        harmony_ids.append(self.vocab['<unk>'])
-                        unk_count += 1
-
-            # Print a message if unknown tokens were generated for the current file
-            if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
-
-            tokens.append(harmony_tokens + [self.eos_token])
-            ids.append(harmony_ids + [self.vocab[self.eos_token]])
-
-        return {'tokens': tokens, 'ids': ids}
-    # end transform
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+    # end __call__
 
 # end class GCTRootPCTokenizer
 
@@ -879,78 +628,9 @@ class GCTSymbolTokenizer(HarmonyTokenizerBase):
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
 
-    def transform(self, corpus, add_start_harmony_token=True):
-        tokens = []
-        ids = []
-
-        for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track '<unk>' tokens for the current file
-            score = converter.parse(file_path)
-            part = score.parts[0]  # Assume lead sheet
-            measures = list(part.getElementsByClass('Measure'))
-            harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
-
-            # Create a mapping of measures to their quarter lengths
-            measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
-
-            if add_start_harmony_token:
-                harmony_tokens = [self.start_harmony_token]
-                harmony_ids = [self.vocab[self.start_harmony_token]]
-            else:
-                harmony_tokens = [self.bos_token]
-                harmony_ids = [self.vocab[self.bos_token]]
-
-            # Ensure every measure (even empty ones) generates tokens
-            for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
-                # Add a "bar" token for each measure
-                harmony_tokens.append('<bar>')
-                harmony_ids.append(self.vocab['<bar>'])
-
-                # Get all chord symbols within the current measure
-                chords_in_measure = [
-                    h for h in harmony_stream if measure_offset <= h.offset < measure_offset + quarter_length
-                ]
-
-                # If the measure is empty, continue to the next measure
-                if not chords_in_measure:
-                    continue
-
-                # Process each chord in the current measure
-                for h in chords_in_measure:
-                    # Quantize time relative to the measure
-                    quant_time = h.offset - measure_offset
-                    time_token = self.find_closest_quantized_time(quant_time)
-
-                    harmony_tokens.append(time_token)
-                    harmony_ids.append(self.vocab[time_token])
-
-                    # Normalize and add the chord symbol
-                    root_token, type_token = self.normalize_chord_symbol(h)
-                    if type_token in EXT_MIR_QUALITIES:
-                        root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
-                        pcs = (root_pc + np.where(bmap > 0)[0])%12
-                        # get gct
-                        g = gct( pcs )
-                        tmp_token = str(g)
-                        if tmp_token not in self.vocab.keys():
-                            tmp_token = '<unk>'
-                        harmony_tokens.append( tmp_token )
-                        harmony_ids.append(self.vocab[ tmp_token ])
-                    else:
-                        # Handle unknown chords
-                        harmony_tokens.append('<unk>')
-                        harmony_ids.append(self.vocab['<unk>'])
-                        unk_count += 1
-
-            # Print a message if unknown tokens were generated for the current file
-            if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
-
-            tokens.append(harmony_tokens + [self.eos_token])
-            ids.append(harmony_ids + [self.vocab[self.eos_token]])
-
-        return {'tokens': tokens, 'ids': ids}
-    # end transform
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+    # end __call__
 
 # end class GCTSymbolTokenizer
 
@@ -1000,83 +680,9 @@ class GCTRootTypeTokenizer(HarmonyTokenizerBase):
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
     # end fit
 
-    def transform(self, corpus, add_start_harmony_token=True):
-        tokens = []
-        ids = []
-
-        for file_path in tqdm(corpus, desc="Processing Files"):
-            unk_count = 0  # Counter to track '<unk>' tokens for the current file
-            score = converter.parse(file_path)
-            part = score.parts[0]  # Assume lead sheet
-            measures = list(part.getElementsByClass('Measure'))
-            harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
-
-            # Create a mapping of measures to their quarter lengths
-            measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
-
-            if add_start_harmony_token:
-                harmony_tokens = [self.start_harmony_token]
-                harmony_ids = [self.vocab[self.start_harmony_token]]
-            else:
-                harmony_tokens = [self.bos_token]
-                harmony_ids = [self.vocab[self.bos_token]]
-
-            # Ensure every measure (even empty ones) generates tokens
-            for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
-                # Add a "bar" token for each measure
-                harmony_tokens.append('<bar>')
-                harmony_ids.append(self.vocab['<bar>'])
-
-                # Get all chord symbols within the current measure
-                chords_in_measure = [
-                    h for h in harmony_stream if measure_offset <= h.offset < measure_offset + quarter_length
-                ]
-
-                # If the measure is empty, continue to the next measure
-                if not chords_in_measure:
-                    continue
-
-                # Process each chord in the current measure
-                for h in chords_in_measure:
-                    # Quantize time relative to the measure
-                    quant_time = h.offset - measure_offset
-                    time_token = self.find_closest_quantized_time(quant_time)
-
-                    harmony_tokens.append(time_token)
-                    harmony_ids.append(self.vocab[time_token])
-
-                    # Normalize and add the chord symbol
-                    root_token, type_token = self.normalize_chord_symbol(h)
-                    if type_token in EXT_MIR_QUALITIES:
-                        root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
-                        pcs = (root_pc + np.where(bmap > 0)[0])%12
-                        # get gct
-                        g = gct( pcs )
-                        # get gct root
-                        tmp_token = 'chord_root_' + str(g[0])
-                        harmony_tokens.append( tmp_token )
-                        harmony_ids.append(self.vocab[ tmp_token ])
-                        # get gct type
-                        tmp_token = str(g[1:])
-                        if tmp_token not in self.vocab.keys():
-                            tmp_token = '<unk>'
-                        harmony_tokens.append( tmp_token )
-                        harmony_ids.append(self.vocab[ tmp_token ])
-                    else:
-                        # Handle unknown chords
-                        harmony_tokens.append('<unk>')
-                        harmony_ids.append(self.vocab['<unk>'])
-                        unk_count += 1
-
-            # Print a message if unknown tokens were generated for the current file
-            if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
-
-            tokens.append(harmony_tokens + [self.eos_token])
-            ids.append(harmony_ids + [self.vocab[self.eos_token]])
-
-        return {'tokens': tokens, 'ids': ids}
-    # end transform
+    def __call__(self, corpus, add_start_harmony_token=True):
+        return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
+    # end __call__
 
 # end class GCTRootTypeTokenizer
 
@@ -1093,10 +699,9 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         self.csl_token = '<s>'
         self.min_pitch = min_pitch  # Minimum MIDI pitch value (e.g., 21 for A0)
         self.max_pitch = max_pitch  # Maximum MIDI pitch value (e.g., 108 for C8)
+        self.construct_basic_vocab()
         if vocab is not None:
             self.vocab = vocab
-        else:
-            self.construct_basic_vocab()
         if special_tokens is not None:
             self.special_tokens = special_tokens
             self._added_tokens_encoder = {}
@@ -1208,6 +813,96 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
         return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
 
+    def encode(self, file_path, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right'):
+        unk_count = 0  # Counter to track '<unk>' tokens for the current file
+        score = converter.parse(file_path)
+        part = score.parts[0]  # Assume single melody line
+        measures = list(part.getElementsByClass('Measure'))
+        melody_stream = part.flat.notesAndRests
+
+        # Create a mapping of measures to their quarter lengths
+        measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
+
+        melody_tokens = [self.bos_token]
+        melody_ids = [self.vocab[self.bos_token]]
+
+        for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
+            # Add a "bar" token for each measure
+            melody_tokens.append('<bar>')
+            melody_ids.append(self.vocab['<bar>'])
+
+            # Get all valid events (notes/rests) within the current measure
+            events_in_measure = [
+                e for e in melody_stream 
+                if measure_offset <= e.offset < measure_offset + quarter_length 
+                and isinstance(e, (note.Note, note.Rest))
+            ]
+
+            # If the measure is empty, add a "Rest" token and continue
+            if not events_in_measure:
+                melody_tokens.append('<rest>')
+                melody_ids.append(self.vocab['<rest>'])
+                continue
+
+            # Process each event in the current measure
+            for e in events_in_measure:
+                # Quantize time relative to the measure
+                quant_time = e.offset - measure_offset
+                time_token = self.find_closest_quantized_time(quant_time)
+
+                melody_tokens.append(time_token)
+                melody_ids.append(self.vocab[time_token])
+
+                # Handle pitch or rest
+                if isinstance(e, note.Note):
+                    # Add pitch token if within range
+                    midi_pitch = e.pitch.midi
+                    if self.min_pitch <= midi_pitch <= self.max_pitch:
+                        pitch_token = f'P:{midi_pitch}'
+                        melody_tokens.append(pitch_token)
+                        melody_ids.append(self.vocab[pitch_token])
+                    else:
+                        # Out-of-range pitch is treated as '<unk>'
+                        melody_tokens.append('<unk>')
+                        melody_ids.append(self.vocab['<unk>'])
+                        unk_count += 1  
+
+                elif isinstance(e, note.Rest):
+                    # Add rest token
+                    melody_tokens.append('<rest>')
+                    melody_ids.append(self.vocab['<rest>'])
+                else:
+                    # Unknown event type is treated as '<unk>'
+                    melody_tokens.append('<unk>')
+                    melody_ids.append(self.vocab['<unk>'])
+                    unk_count += 1  
+
+        attention_mask = [1]*len(melody_ids)
+
+        # Print a message if unknown tokens were generated for the current file
+        if verbose > 0 and unk_count > 0:
+            print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
+        if max_length is not None:
+            melody_tokens = melody_tokens[:max_length]
+            melody_ids = melody_ids[:max_length]
+            attention_mask = [1]*len(melody_ids)
+            if max_length > len(melody_tokens) and pad_to_max_length:
+                if padding_side == 'right':
+                    melody_tokens = melody_tokens + (max_length-len(melody_tokens))*[self.pad_token]
+                    melody_ids = melody_ids + (max_length-len(melody_ids))*[self.vocab[self.pad_token]]
+                    attention_mask = attention_mask + (max_length-len(attention_mask))*[0]
+                else:
+                    melody_tokens =  (max_length-len(melody_tokens))*[self.pad_token] + melody_tokens
+                    melody_ids = (max_length-len(melody_ids))*[self.vocab[self.pad_token]] + melody_ids
+                    attention_mask = (max_length-len(attention_mask))*[0] + attention_mask
+        # TODO: return overflowing tokens
+        return {
+            'input_tokens': melody_tokens,
+            'input_ids': melody_ids,
+            'attention_mask': attention_mask
+        }
+    # end encode
+
     def transform(self, corpus):
         """
         Transform a list of MusicXML files into melody tokens and IDs.
@@ -1217,76 +912,11 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
 
         # Use tqdm to show progress when processing files
         for file_path in tqdm(corpus, desc="Processing Melody Files"):
-            unk_count = 0  # Counter to track '<unk>' tokens for the current file
-            score = converter.parse(file_path)
-            part = score.parts[0]  # Assume single melody line
-            measures = list(part.getElementsByClass('Measure'))
-            melody_stream = part.flat.notesAndRests
-
-            # Create a mapping of measures to their quarter lengths
-            measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
-
-            melody_tokens = [self.bos_token]
-            melody_ids = [self.vocab[self.bos_token]]
-
-            for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
-                # Add a "bar" token for each measure
-                melody_tokens.append('<bar>')
-                melody_ids.append(self.vocab['<bar>'])
-
-                # Get all valid events (notes/rests) within the current measure
-                events_in_measure = [
-                    e for e in melody_stream 
-                    if measure_offset <= e.offset < measure_offset + quarter_length 
-                    and isinstance(e, (note.Note, note.Rest))
-                ]
-
-                # If the measure is empty, add a "Rest" token and continue
-                if not events_in_measure:
-                    melody_tokens.append('<rest>')
-                    melody_ids.append(self.vocab['<rest>'])
-                    continue
-
-                # Process each event in the current measure
-                for e in events_in_measure:
-                    # Quantize time relative to the measure
-                    quant_time = e.offset - measure_offset
-                    time_token = self.find_closest_quantized_time(quant_time)
-
-                    melody_tokens.append(time_token)
-                    melody_ids.append(self.vocab[time_token])
-
-                    # Handle pitch or rest
-                    if isinstance(e, note.Note):
-                        # Add pitch token if within range
-                        midi_pitch = e.pitch.midi
-                        if self.min_pitch <= midi_pitch <= self.max_pitch:
-                            pitch_token = f'P:{midi_pitch}'
-                            melody_tokens.append(pitch_token)
-                            melody_ids.append(self.vocab[pitch_token])
-                        else:
-                            # Out-of-range pitch is treated as '<unk>'
-                            melody_tokens.append('<unk>')
-                            melody_ids.append(self.vocab['<unk>'])
-                            unk_count += 1  
-
-                    elif isinstance(e, note.Rest):
-                        # Add rest token
-                        melody_tokens.append('<rest>')
-                        melody_ids.append(self.vocab['<rest>'])
-                    else:
-                        # Unknown event type is treated as '<unk>'
-                        melody_tokens.append('<unk>')
-                        melody_ids.append(self.vocab['<unk>'])
-                        unk_count += 1  
-
-            # Print a message if unknown tokens were generated for the current file
-            if unk_count > 0:
-                print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
-
+            encoded = self.encode(file_path)
+            melody_tokens = encoded['input_tokens']
+            melody_ids = encoded['input_ids']
             tokens.append(melody_tokens + [self.eos_token])
             ids.append(melody_ids + [self.vocab[self.eos_token]])
-
         return {'tokens': tokens, 'ids': ids}
     # end transform
 
