@@ -1,5 +1,5 @@
 # https://huggingface.co/docs/transformers/v4.47.1/en/internal/tokenization_utils#transformers.PreTrainedTokenizer
-from tqdm import tqdm 
+from tqdm import tqdm
 from transformers import PreTrainedTokenizer
 from music21 import converter, harmony, pitch, note, interval
 import mir_eval
@@ -8,6 +8,7 @@ import numpy as np
 from GCT_functions import get_singe_GCT_of_chord as gct
 import os
 import json
+from copy import deepcopy
 
 INT_TO_ROOT_SHARP = {
     0: 'C',
@@ -86,6 +87,11 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         for num, denom in self.time_signatures:
             ts_token = f"ts_{num}x{denom}"
             self.vocab[ts_token] = len(self.vocab)
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.pad_token_id = 1
+        self.bos_token_id = 2
+        self.eos_token_id = 3
+        self.mask_token_id = 5
     # end construct_basic_vocab
 
     def infer_time_signatures_from_quantization(self, time_quantization, max_quarters=10):
@@ -203,6 +209,10 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         return f"{root}", f"{quality}"
     # end normalize_chord_symbol
 
+    def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
+        raise NotImplementedError()
+    # end handle_chord_symbol
+
     def fit(self, corpus):
         pass
     # end fit
@@ -220,7 +230,6 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
     # end transform
 
     def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right'):
-        unk_count = 0  # Counter to track '<unk>' tokens for the current file
         score = converter.parse(file_path)
         part = score.parts[0]  # Assume lead sheet
         measures = list(part.getElementsByClass('Measure'))
@@ -261,21 +270,13 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
                 harmony_ids.append(self.vocab[time_token])
 
                 # Normalize and add the chord symbol
-                root_token, type_token = self.normalize_chord_symbol(h)
-                chord_token = root_token + ':' + type_token
-                if chord_token in self.vocab:
-                    harmony_tokens.append(chord_token)
-                    harmony_ids.append(self.vocab[chord_token])
-                else:
-                    # Handle unknown chords
-                    harmony_tokens.append('<unk>')
-                    harmony_ids.append(self.vocab['<unk>'])
-                    unk_count += 1
+                self.handle_chord_symbol(h, harmony_tokens, harmony_ids)
         
         attention_mask = [1]*len(harmony_ids)
 
         # Print a message if unknown tokens were generated for the current file
-        if verbose > 0 and unk_count > 0:
+        if verbose > 0 and harmony_tokens.count(self.unk_token) > 0:
+            unk_count = harmony_tokens.count(self.unk_token)
             print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
         if max_length is not None:
             harmony_tokens = harmony_tokens[:max_length]
@@ -363,12 +364,13 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         self.special_tokens = {}
         self._added_tokens_encoder = {} # TODO: allow for special tokens
         # merge vocabularies - start with mel_tokinzer
-        self.vocab = mel_tokenizer.vocab
+        self.vocab = deepcopy(mel_tokenizer.vocab)
         # add harm_tokenizer on top of that
         if self.verbose > 0:
             print('Merging harmony vocab')
         self.merge_dict_to_vocab( harm_tokenizer.vocab )
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end init
 
     def convert_tokens_to_ids(self, tokens):
@@ -403,6 +405,7 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
             print('Merging harmony vocab')
         self.merge_dict_to_vocab(self.harmony_tokenizer.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end fit
 
     def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, pad_melody=False, padding_side='right'):
@@ -493,7 +496,21 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
                         #print(chord_token)
                         self.vocab[chord_token] = len(self.vocab)
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end init
+
+    def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
+        # Normalize and add the chord symbol
+        root_token, type_token = self.normalize_chord_symbol(h)
+        chord_token = root_token + ':' + type_token
+        if chord_token in self.vocab:
+            harmony_tokens.append(chord_token)
+            harmony_ids.append(self.vocab[chord_token])
+        else:
+            # Handle unknown chords
+            harmony_tokens.append(self.unk_token)
+            harmony_ids.append(self.vocab[self.unk_token])
+    # end handle_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -524,7 +541,26 @@ class RootTypeTokenizer(HarmonyTokenizerBase):
                     #print(chord_token)
                     self.vocab[quality_token] = len(self.vocab)
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end init
+
+    def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
+        root_token, type_token = self.normalize_chord_symbol(h)
+        if root_token in self.vocab:
+            harmony_tokens.append(root_token)
+            harmony_ids.append(self.vocab[root_token])
+        else:
+            # Handle unknown chords
+            harmony_tokens.append(self.unk_token)
+            harmony_ids.append(self.vocab[self.unk_token])
+        if type_token in self.vocab:
+            harmony_tokens.append(type_token)
+            harmony_ids.append(self.vocab[type_token])
+        else:
+            # Handle unknown chords
+            harmony_tokens.append(self.unk_token)
+            harmony_ids.append(self.vocab[self.unk_token])
+    # end handle_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -541,7 +577,24 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
             for pc in range(12):
                 self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end init
+
+    def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
+        # Normalize and add the chord symbol
+        root_token, type_token = self.normalize_chord_symbol(h)
+        if type_token in EXT_MIR_QUALITIES:
+            root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
+            pcs = (root_pc + np.where(bmap > 0)[0])%12
+            for pc in pcs:
+                tmp_token = 'chord_pc_' + str(pc)
+                harmony_tokens.append( tmp_token )
+                harmony_ids.append(self.vocab[ tmp_token ])
+        else:
+            # Handle unknown chords
+            harmony_tokens.append(self.unk_token)
+            harmony_ids.append(self.vocab[self.unk_token])
+    # end handle_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -560,7 +613,28 @@ class RootPCTokenizer(HarmonyTokenizerBase):
             for pc in range(12):
                 self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end init
+
+    def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
+        # Normalize and add the chord symbol
+        root_token, type_token = self.normalize_chord_symbol(h)
+        if type_token in EXT_MIR_QUALITIES:
+            root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
+            pcs = (root_pc + np.where(bmap > 0)[0])%12
+            tmp_token = 'chord_root_' + str(root_pc)
+            harmony_tokens.append( tmp_token )
+            harmony_ids.append(self.vocab[ tmp_token ])
+            for pc in pcs:
+                if pc != root_pc:
+                    tmp_token = 'chord_pc_' + str(pc)
+                    harmony_tokens.append( tmp_token )
+                    harmony_ids.append(self.vocab[ tmp_token ])
+        else:
+            # Handle unknown chords
+            harmony_tokens.append(self.unk_token)
+            harmony_ids.append(self.vocab[self.unk_token])
+    # end handle_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -579,7 +653,31 @@ class GCTRootPCTokenizer(HarmonyTokenizerBase):
             for pc in range(12):
                 self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
             self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end init
+
+    def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
+        # Normalize and add the chord symbol
+        root_token, type_token = self.normalize_chord_symbol(h)
+        if type_token in EXT_MIR_QUALITIES:
+            root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
+            pcs = (root_pc + np.where(bmap > 0)[0])%12
+            # get gct
+            g = gct( pcs )
+            # get root pc
+            tmp_token = 'chord_root_' + str( g[0] )
+            harmony_tokens.append( tmp_token )
+            harmony_ids.append(self.vocab[ tmp_token ])
+            # get pitch classes from mir_eval
+            for pc in g[2:]:
+                tmp_token = 'chord_pc_' + str((pc+g[0])%12)
+                harmony_tokens.append( tmp_token )
+                harmony_ids.append(self.vocab[ tmp_token ])
+        else:
+            # Handle unknown chords
+            harmony_tokens.append(self.unk_token)
+            harmony_ids.append(self.vocab[self.unk_token])
+    # end handle_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -590,7 +688,27 @@ class GCTRootPCTokenizer(HarmonyTokenizerBase):
 class GCTSymbolTokenizer(HarmonyTokenizerBase):
     def __init__(self, vocab=None, special_tokens=None, **kwargs):
         super(GCTSymbolTokenizer, self).__init__(vocab=vocab, special_tokens=special_tokens, **kwargs)
+        self.total_vocab_size = len(self.vocab)
     # end init
+
+    def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
+        # Normalize and add the chord symbol
+        root_token, type_token = self.normalize_chord_symbol(h)
+        if type_token in EXT_MIR_QUALITIES:
+            root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
+            pcs = (root_pc + np.where(bmap > 0)[0])%12
+            # get gct
+            g = gct( pcs )
+            tmp_token = str(g)
+            if tmp_token not in self.vocab.keys():
+                tmp_token = self.unk_token
+            harmony_tokens.append( tmp_token )
+            harmony_ids.append(self.vocab[ tmp_token ])
+        else:
+            # Handle unknown chords
+            harmony_tokens.append(self.unk_token)
+            harmony_ids.append(self.vocab[self.unk_token])
+    # end handle_chord_symbol
 
     def fit(self, corpus):
         for file_path in tqdm(corpus, desc="Processing Files"):
@@ -626,6 +744,7 @@ class GCTSymbolTokenizer(HarmonyTokenizerBase):
                         if tmp_token not in self.vocab.keys():
                             self.vocab[tmp_token] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end fit
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -642,7 +761,32 @@ class GCTRootTypeTokenizer(HarmonyTokenizerBase):
             # chord root and pitch classes
             for root in range(12):
                 self.vocab['chord_root_' + str(root)] = len(self.vocab)
+        self.total_vocab_size = len(self.vocab)
     # end init
+
+    def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
+        # Normalize and add the chord symbol
+        root_token, type_token = self.normalize_chord_symbol(h)
+        if type_token in EXT_MIR_QUALITIES:
+            root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
+            pcs = (root_pc + np.where(bmap > 0)[0])%12
+            # get gct
+            g = gct( pcs )
+            # get gct root
+            tmp_token = 'chord_root_' + str(g[0])
+            harmony_tokens.append( tmp_token )
+            harmony_ids.append(self.vocab[ tmp_token ])
+            # get gct type
+            tmp_token = str(g[1:])
+            if tmp_token not in self.vocab.keys():
+                tmp_token = self.unk_token
+            harmony_tokens.append( tmp_token )
+            harmony_ids.append(self.vocab[ tmp_token ])
+        else:
+            # Handle unknown chords
+            harmony_tokens.append(self.unk_token)
+            harmony_ids.append(self.vocab[self.unk_token])
+    # end handle_chord_symbol
 
     def fit(self, corpus):
         for file_path in tqdm(corpus, desc="Processing Files"):
@@ -678,6 +822,7 @@ class GCTRootTypeTokenizer(HarmonyTokenizerBase):
                         if tmp_token not in self.vocab.keys():
                             self.vocab[tmp_token] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.total_vocab_size = len(self.vocab)
     # end fit
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -708,6 +853,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         else:
             self.special_tokens = {} # not really needed in this implementation
             self._added_tokens_encoder = {}
+        self.total_vocab_size = len(self.vocab)
     # end init
 
     def construct_basic_vocab(self):
@@ -741,6 +887,10 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = len(self.vocab)
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()} #TODO check with Max
+        self.pad_token_id = 1
+        self.bos_token_id = 2
+        self.eos_token_id = 3
+        self.mask_token_id = 5
 
         # Compute and store most popular time signatures coming from predefined time tokens
         self.time_signatures = self.infer_time_signatures_from_quantization(self.time_quantization, max_quarters)
