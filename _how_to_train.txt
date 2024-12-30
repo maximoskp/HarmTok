@@ -1,0 +1,9 @@
+python train_main.py -t ChordSymbolTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 0 -e 10 -l 5e-5 -b 30
+python train_main.py -t RootTypeTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 1 -e 10 -l 5e-5 -b 30
+python train_main.py -t PitchClassTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 2 -e 10 -l 5e-5 -b 30
+
+python train_main.py -t RootPCTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 0 -e 10 -l 5e-5 -b 30
+python train_main.py -t GCTRootPCTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 1 -e 10 -l 5e-5 -b 30
+python train_main.py -t GCTSymbolTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 2 -e 10 -l 5e-5 -b 30
+
+python train_main.py -t GCTRootTypeTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 0 -e 10 -l 5e-5 -b 30
