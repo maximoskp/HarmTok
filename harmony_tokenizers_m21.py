@@ -1,14 +1,14 @@
 # https://huggingface.co/docs/transformers/v4.47.1/en/internal/tokenization_utils#transformers.PreTrainedTokenizer
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer
-from music21 import converter, harmony, pitch, note, interval
+from music21 import converter, harmony, pitch, note, interval, stream, meter
 import mir_eval
 from copy import deepcopy
 import numpy as np
 from GCT_functions import get_singe_GCT_of_chord as gct
 import os
 import json
-from copy import deepcopy
+
 
 INT_TO_ROOT_SHARP = {
     0: 'C',
@@ -23,6 +23,27 @@ INT_TO_ROOT_SHARP = {
     9: 'A',
     10: 'A#',
     11: 'B',
+}
+
+TOKEN_TO_MUSIC21_QUALITY = {
+    'maj': '',
+    'min': 'm',
+    'dim': 'dim',
+    'aug': '+',
+    'maj7': 'M7',
+    'min7': 'm7',
+    '7': '7',
+    'dim7': 'dim7',
+    'hdim7': 'm7b5',
+    'min6': 'm6',
+    'maj6': '6',
+    '9': '9',
+    'min9': 'm9',
+    'maj9': 'M9',
+    '7(b9)': '7b9',
+    '7(#9)': '7#9',
+    '7(#11)': '7#11',
+    '7(b13)': '7b13',
 }
 
 MIR_QUALITIES = mir_eval.chord.QUALITIES
@@ -65,7 +86,6 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
                 '<h>': 7
             }
         self.time_quantization = []  # Store predefined quantized times
-        self.time_signatures = []  # Store most common time signatures
 
         # Predefine time quantization tokens for a single measure 1/16th triplets
         max_quarters = 10  # Support up to 10/4 time signatures
@@ -79,59 +99,13 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
                 subdivision_part = int(round((quant_time - quarter_part) * 100))
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = len(self.vocab)
-
-        # Compute and store most popular time signatures coming from predefined time tokens
-        self.time_signatures = self.infer_time_signatures_from_quantization(self.time_quantization, max_quarters)
-
-        # Add time signature tokens to the vocabulary
-        for num, denom in self.time_signatures:
-            ts_token = f"ts_{num}x{denom}"
-            self.vocab[ts_token] = len(self.vocab)
+      
         self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
         self.pad_token_id = 1
         self.bos_token_id = 2
         self.eos_token_id = 3
         self.mask_token_id = 5
     # end construct_basic_vocab
-
-    def infer_time_signatures_from_quantization(self, time_quantization, max_quarters=10):
-        """
-        Calculate time signatures based on the quantization scheme. Only x/4 and x/8 are
-        included. Removing duplicates like 2/4 and 4/8 keeping the simplest denominator.
-        """
-        inferred_time_signatures = set()
-
-        for measure_length in range(1, max_quarters + 1):
-            # Extract tokens within the current measure
-            measure_tokens = [t for t in time_quantization if int(t) < measure_length]
-
-            # Add `x/4` time signatures (number of quarters in the measure)
-            inferred_time_signatures.add((measure_length, 4))
-
-            # Validate all valid groupings for `x/8`
-            for numerator in range(1, measure_length * 2 + 1):  # Up to 2 eighths per quarter
-                eighth_duration = 0.5  # Fixed duration for eighth notes
-                valid_onsets = [i * eighth_duration for i in range(numerator)]
-                
-                # Check if measure_tokens contains a valid subset matching the onsets
-                if all(any(abs(t - onset) < 0.01 for t in measure_tokens) for onset in valid_onsets):
-                    inferred_time_signatures.add((numerator, 8))
-        
-        # Remove equivalent time signatures. Separate x/4 and x/8 time signatures
-        quarter_signatures = {num for num, denom in inferred_time_signatures if denom == 4}
-        cleaned_signatures = [] 
-        
-        for num, denom in inferred_time_signatures:
-            # Keep x/4 time signatures
-            if denom == 4:
-                cleaned_signatures.append((num, denom))
-            # Keep x/8 only if there's no equivalent x/4
-            elif denom == 8 and num / 2 not in quarter_signatures:
-                cleaned_signatures.append((num, denom))              
-
-        # Return sorted time signatures
-        return sorted(cleaned_signatures)
-    # end infer_time_signatures_from_quantization
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
@@ -278,6 +252,7 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         if verbose > 0 and harmony_tokens.count(self.unk_token) > 0:
             unk_count = harmony_tokens.count(self.unk_token)
             print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
+
         if max_length is not None:
             harmony_tokens = harmony_tokens[:max_length]
             harmony_ids = harmony_ids[:max_length]
@@ -437,6 +412,67 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         }
     # end encode
 
+    def decode(self, token_sequence, output_format='text', output_path='test.mxl'):
+
+        # Step 1: Strip <pad> tokens and split into melody and harmony parts
+        token_sequence = [token for token in token_sequence if token != self.pad_token]  # Remove all <pad> tokens
+
+        try:
+            split_index = token_sequence.index('<h>')
+        except ValueError:
+            raise ValueError("The token sequence does not contain an '<h>' token to separate melody and harmony.")
+
+        melody_tokens = token_sequence[:split_index]
+        harmony_tokens = token_sequence[split_index + 1:]  # Exclude the <h> token
+
+        # Step 2: Decode melody
+        melody_part = self.melody_tokenizer.decode(melody_tokens)
+        measures = melody_part.getElementsByClass('Measure')  # Retrieve all measures from the melody
+
+        # Step 3: Decode harmony and align with measures
+        current_measure_index = -1  # Track the measure being processed. -1 to fit the logic with the first bar
+        quantized_time = 0  # Track the time position in the current measure
+
+        for token in harmony_tokens:
+            if token == self.bos_token:
+                continue
+            elif token == self.eos_token:
+                break
+            elif token == '<bar>':
+                # Move to the next measure
+                if current_measure_index < len(measures) - 1:
+                    current_measure_index += 1
+                else:
+                    print(f"Warning: Exceeded measure count when processing token '{token}'.")
+                quantized_time = 0  # Reset time for the new measure
+            elif token.startswith('position_'):
+                # Update the quantized time position
+                position = token.split('_')[1]
+                quarter_part, subdivision_part = map(int, position.split('x'))
+                quantized_time = quarter_part + subdivision_part / 100
+            else:
+                # Decode the chord symbol
+                chord_symbol_obj = self.harmony_tokenizer.decode_chord_symbol(token)
+                if chord_symbol_obj is not None:
+                    # Ensure we do not exceed the number of measures
+                    if current_measure_index < len(measures):
+                        measure = measures[current_measure_index]
+                        # Add chord symbol at the quantized time
+                        chord_symbol_obj.offset = quantized_time
+                        measure.append(chord_symbol_obj) 
+                        # fix quantized time in case it is added in the end. music21 bug?
+                        measure.elements[-1].offset = quantized_time
+
+                    else:
+                        print(f"Warning: Skipping chord '{token}' as no corresponding measure exists.")
+
+        # Step 4: Display or save the result
+        if output_format == 'text':
+            melody_part.show('text')
+        elif output_format == 'file':
+            melody_part.write('musicxml', output_path)
+            print('Saved as', output_path)
+
     def transform(self, corpus, add_start_harmony_token=True):
         # first put melody tokens
         if self.verbose > 0:
@@ -511,6 +547,35 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
             harmony_tokens.append(self.unk_token)
             harmony_ids.append(self.vocab[self.unk_token])
     # end handle_chord_symbol
+
+    def decode_chord_symbol(self, token):
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        if ':' not in token:
+            # Invalid chord symbol, return None
+            return None
+
+        # Split the token into root and quality
+        root_token, quality_token = token.split(':')
+
+        # Translate the quality token using the predefined mapping
+        music21_quality = TOKEN_TO_MUSIC21_QUALITY.get(quality_token, None)
+
+        if music21_quality is None:
+            print(f"Error: Unrecognized quality '{quality_token}' in token '{token}'")
+            return None
+
+        try:
+            # Construct the full chord symbol as a string
+            chord_symbol_str = f"{root_token}{music21_quality}"
+
+            # Create a ChordSymbol from the string
+            chord_symbol = harmony.ChordSymbol(chord_symbol_str)
+            return chord_symbol
+        except Exception as e:
+            print(f"Error constructing ChordSymbol for {token}: {e}")
+            return None
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -971,15 +1036,40 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         melody_stream = part.flat.notesAndRests
 
         # Create a mapping of measures to their quarter lengths
-        measure_map = {m.offset: (m.measureNumber, m.quarterLength) for m in measures}
+        measure_map = {m.offset: (m.quarterLength, m.timeSignature) for m in measures}
 
         melody_tokens = [self.bos_token]
         melody_ids = [self.vocab[self.bos_token]]
 
-        for measure_offset, (measure_number, quarter_length) in sorted(measure_map.items()):
+        for measure_offset, (quarter_length, time_signature) in sorted(measure_map.items()):
             # Add a "bar" token for each measure
             melody_tokens.append('<bar>')
             melody_ids.append(self.vocab['<bar>'])
+
+            # Add a time signature token if it exists
+            if time_signature:
+                ts_token = f"ts_{time_signature.numerator}x{time_signature.denominator}"
+                if ts_token in self.vocab:
+                    melody_tokens.append(ts_token)
+                    melody_ids.append(self.vocab[ts_token])
+                else:
+                    # Check for equivalent time signature in vocabulary
+                    reduced_numerator = time_signature.numerator
+                    reduced_denominator = time_signature.denominator
+                    while reduced_denominator % 2 == 0 and reduced_numerator % 2 == 0:
+                        reduced_numerator //= 2
+                        reduced_denominator //= 2
+                    equivalent_ts_token = f"ts_{reduced_numerator}x{reduced_denominator}"
+                    if equivalent_ts_token in self.vocab:
+                        melody_tokens.append(equivalent_ts_token)
+                        melody_ids.append(self.vocab[equivalent_ts_token])
+                    else:
+                        # Default to 4/4 and issue a warning
+                        default_ts_token = "ts_4x4"
+                        melody_tokens.append(default_ts_token)
+                        melody_ids.append(self.vocab[default_ts_token])
+                        if verbose > 0:
+                            print(f"Warning: Time signature not found in vocab. Defaulting to 4/4.")
 
             # Get all valid events (notes/rests) within the current measure
             events_in_measure = [
@@ -1032,6 +1122,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         # Print a message if unknown tokens were generated for the current file
         if verbose > 0 and unk_count > 0:
             print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
+        
         if max_length is not None:
             melody_tokens = melody_tokens[:max_length]
             melody_ids = melody_ids[:max_length]
@@ -1052,6 +1143,109 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
             'attention_mask': attention_mask
         }
     # end encode
+
+    def decode(self, tokens):
+        """
+        Decode a sequence of tokens into a music21 Part for the melody, considering time signatures.
+        """
+        melody_part = stream.Part()
+
+        current_measure = None
+        current_time_signature = None
+        bar_length = None
+
+        quantized_time = 0  # Track time position within the measure
+        last_position = None  # To calculate durations for notes/rests
+
+        # Track measure numbers
+        measure_number = 1
+
+        def finalize_measure(current_measure, bar_length, last_position):
+            """
+            Finalize the measure by adjusting the duration of the last element
+            to fill the remaining time in the bar.
+            """
+            if current_measure is not None and last_position is not None and len(current_measure.elements) > 0:
+                remaining_duration = bar_length - last_position
+                if remaining_duration > 0:
+                    current_measure[-1].quarterLength = remaining_duration
+            return current_measure
+
+        for token in tokens:
+            if token == self.bos_token:
+                continue
+            elif token == self.eos_token:
+                # Finalize the last measure and stop
+                current_measure = finalize_measure(current_measure, bar_length, last_position)
+                if current_measure is not None and len(current_measure.elements) > 0:
+                    melody_part.append(current_measure)
+                    current_measure = None  # Reset after appending
+                break
+            elif token == '<bar>':
+                # Finalize the current measure and start a new one
+                current_measure = finalize_measure(current_measure, bar_length, last_position)
+                if current_measure is not None and len(current_measure.elements) > 0:
+                    melody_part.append(current_measure)
+                    current_measure = None  # Reset after appending
+                # Create a new measure instance and assign a measure number
+                current_measure = stream.Measure(number=measure_number)
+                measure_number += 1
+                quantized_time = 0  # Reset time for the new measure
+                last_position = None  # Reset last position
+                # Add default time signature only if none exists
+                if current_time_signature is None:
+                    current_time_signature = meter.TimeSignature("4/4")
+                    bar_length = current_time_signature.barDuration.quarterLength
+                    current_measure.append(current_time_signature)
+            elif token.startswith('ts_'):
+                # Time signature token, update bar length
+                ts_values = token.split('_')[1]
+                num, denom = ts_values.split('x')
+                new_time_signature = meter.TimeSignature(f"{num}/{denom}")
+                bar_length = new_time_signature.barDuration.quarterLength
+                if current_measure is None:
+                    current_measure = stream.Measure(number=measure_number)
+                    measure_number += 1
+                # Replace default time signature if it exists
+                if current_time_signature != new_time_signature:
+                    current_measure.timeSignature = new_time_signature
+                current_time_signature = new_time_signature
+            elif token.startswith('position_'):
+                # Update the quantized time position
+                position = token.split('_')[1]
+                quarter_part, subdivision_part = map(int, position.split('x'))
+                quantized_time = quarter_part + subdivision_part / 100
+                if last_position is not None and len(current_measure.elements) > 0:
+                    # Calculate the duration for the previous note/rest
+                    duration = quantized_time - last_position
+                    if duration > 0:
+                        current_measure[-1].quarterLength = duration
+                last_position = quantized_time
+            elif token.startswith('P:'):
+                # Create a note based on the pitch
+                midi_pitch = int(token.split(':')[1])
+                note_obj = note.Note(midi_pitch)
+                note_obj.offset = quantized_time
+                if current_measure is None:
+                    current_measure = stream.Measure(number=measure_number)
+                    measure_number += 1
+                current_measure.append(note_obj)
+            elif token == '<rest>':
+                # Create a rest
+                rest_obj = note.Rest()
+                rest_obj.offset = quantized_time
+                if current_measure is None:
+                    current_measure = stream.Measure(number=measure_number)
+                    measure_number += 1
+                current_measure.append(rest_obj)
+
+        # Add the final measure to the part
+        if current_measure is not None and len(current_measure.elements) > 0:
+            melody_part.append(current_measure)
+            current_measure = None  # Reset after appending
+
+        return melody_part
+    # end decode
 
     def transform(self, corpus):
         """
