@@ -44,7 +44,7 @@ def main():
     train_dir = args.datatrain
     val_dir = args.dataval
     device_name = 'cpu'
-    if args.gpu:
+    if args.gpu is not None:
         if args.gpu > -1:
             device_name = 'cuda:' + str(args.gpu)
     epochs = 100
