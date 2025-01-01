@@ -1,11 +1,13 @@
 import torch
 from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pad_sequence
 from harmony_tokenizers_m21 import MergedMelHarmTokenizer
 import random
 import os
 
-class MergedMelodyHarmonyDataset(Dataset):
-    def __init__(self, root_dir, merged_tokenizer, max_length=512, return_attention_mask=False):
+class MergedMelHarmDataset(Dataset):
+    def __init__(self, root_dir, merged_tokenizer, max_length=512, \
+                 return_attention_mask=False, return_harmonization_labels=False):
         # root_dir: the directory that includes subdirectories with mlx or xml files
         # Walk through all subdirectories and files
         self.data_files = []
@@ -17,6 +19,7 @@ class MergedMelodyHarmonyDataset(Dataset):
         self.merged_tokenizer = merged_tokenizer
         self.max_length = max_length
         self.return_attention_mask = return_attention_mask
+        self.return_harmonization_labels = return_harmonization_labels
     # end init
 
     def __len__(self):
@@ -26,7 +29,19 @@ class MergedMelodyHarmonyDataset(Dataset):
     def __getitem__(self, idx):
         data_file = self.data_files[idx]
         encoded = self.merged_tokenizer.encode(data_file, max_length=self.max_length, pad_to_max_length=True)
-        if self.return_attention_mask:
+        if self.return_harmonization_labels:
+            input_ids = torch.tensor(encoded['input_ids'], dtype=torch.long)
+            attention_mask = torch.tensor(encoded['attention_mask'], dtype=torch.long)
+            # Generate labels: mask the question part
+            sep_token_idx = (input_ids == self.merged_tokenizer.vocab['<h>']).nonzero(as_tuple=True)[0]
+            labels = input_ids.clone()
+            labels[:sep_token_idx + 1] = -100  # Ignore question tokens and <h> in loss computation
+            return {
+                'input_ids': input_ids[:-1],
+                'attention_mask': attention_mask[:-1],
+                'labels': labels[1:]
+            }
+        elif self.return_attention_mask:
             return {
                 'input_ids': torch.tensor(encoded['input_ids'], dtype=torch.long),
                 'attention_mask': torch.tensor(encoded['attention_mask'], dtype=torch.long)
@@ -69,3 +84,24 @@ class MLMCollator:
     # end call
 
 # end class MLMCollator
+
+class GenCollator:
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+        self.pad_token_id = tokenizer.vocab[tokenizer.pad_token]
+    # end init
+
+    def __call__(self, batch):
+        input_ids = pad_sequence([item["input_ids"] for item in batch], batch_first=True, padding_value=self.pad_token_id)
+        attention_mask = pad_sequence([item["attention_mask"] for item in batch], batch_first=True, padding_value=0)
+        labels = pad_sequence([item["labels"] for item in batch], batch_first=True, padding_value=-100)
+        # also neutralize all that come pre-padded from the dataset
+        labels[ labels == self.pad_token_id ] = -100
+        
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+    # end call
+# end class GenCollator
