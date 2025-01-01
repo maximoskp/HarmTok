@@ -100,16 +100,21 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = len(self.vocab)
       
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.update_ids_to_tokens()
+        self.unk_token_id = 0
         self.pad_token_id = 1
         self.bos_token_id = 2
         self.eos_token_id = 3
         self.mask_token_id = 5
     # end construct_basic_vocab
 
+    def update_ids_to_tokens(self):
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+    # end update_ids_to_tokens
+
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+            return self.vocab.get(tokens, self.unk_token_id)
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
@@ -198,12 +203,12 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
             encoded = self.encode(file_path, add_start_harmony_token=add_start_harmony_token)
             harmony_tokens = encoded['input_tokens']
             harmony_ids = encoded['input_ids']
-            tokens.append(harmony_tokens + [self.eos_token])
-            ids.append(harmony_ids + [self.vocab[self.eos_token]])
+            tokens.append(harmony_tokens)
+            ids.append(harmony_ids)
         return {'tokens': tokens, 'ids': ids}
     # end transform
 
-    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right'):
+    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right', add_eos_token=True):
         score = converter.parse(file_path)
         part = score.parts[0]  # Assume lead sheet
         measures = list(part.getElementsByClass('Measure'))
@@ -254,18 +259,22 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
             print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
 
         if max_length is not None:
-            harmony_tokens = harmony_tokens[:max_length]
-            harmony_ids = harmony_ids[:max_length]
-            attention_mask = [1]*len(harmony_ids)
             if max_length > len(harmony_tokens) and pad_to_max_length:
                 if padding_side == 'right':
-                    harmony_tokens = harmony_tokens + (max_length-len(harmony_tokens))*[self.pad_token]
-                    harmony_ids = harmony_ids + (max_length-len(harmony_ids))*[self.vocab[self.pad_token]]
+                    harmony_tokens = harmony_tokens + add_eos_token*[self.eos_token] + (max_length-add_eos_token-len(harmony_tokens))*[self.pad_token]
+                    harmony_ids = harmony_ids + add_eos_token*[self.vocab[self.eos_token]] + (max_length-add_eos_token-len(harmony_ids))*[self.vocab[self.pad_token]]
                     attention_mask = attention_mask + (max_length-len(attention_mask))*[0]
                 else:
-                    harmony_tokens =  (max_length-len(harmony_tokens))*[self.pad_token] + harmony_tokens
-                    harmony_ids = (max_length-len(harmony_ids))*[self.vocab[self.pad_token]] + harmony_ids
-                    attention_mask = (max_length-len(attention_mask))*[0] + attention_mask
+                    harmony_tokens =  (max_length-add_eos_token-len(harmony_tokens))*[self.pad_token] + harmony_tokens + add_eos_token*[self.eos_token]
+                    harmony_ids = (max_length-add_eos_token-len(harmony_ids))*[self.vocab[self.pad_token]] + harmony_ids + add_eos_token*[self.vocab[self.eos_token]]
+                    attention_mask = (max_length-add_eos_token-len(attention_mask))*[0] + attention_mask + add_eos_token*[1]
+            else:
+                harmony_tokens = harmony_tokens[:max_length]
+                harmony_ids = harmony_ids[:max_length]
+                attention_mask = [1]*len(harmony_ids)
+                if add_eos_token:
+                    harmony_tokens[-1] = self.eos_token
+                    harmony_ids[-1] = self.vocab[self.eos_token]
         # TODO: return overflowing tokens
         return {
             'input_tokens': harmony_tokens,
@@ -343,14 +352,25 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         # add harm_tokenizer on top of that
         if self.verbose > 0:
             print('Merging harmony vocab')
-        self.merge_dict_to_vocab( harm_tokenizer.vocab )
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.merge_and_update_dict_to_vocab( harm_tokenizer.vocab )
+        self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
+        self.unk_token_id = 0
+        self.pad_token_id = 1
+        self.bos_token_id = 2
+        self.eos_token_id = 3
+        self.mask_token_id = 5
     # end init
+
+    def update_ids_to_tokens(self):
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.melody_tokenizer.update_ids_to_tokens()
+        self.harmony_tokenizer.update_ids_to_tokens()
+    # end update_ids_to_tokens
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+            return self.vocab.get(tokens, self.unk_token_id)
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
@@ -360,11 +380,13 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         return [self.ids_to_tokens[i] for i in ids]
     # end convert_ids_to_tokens
 
-    def merge_dict_to_vocab(self, d):
+    def merge_and_update_dict_to_vocab(self, d):
         for k in d.keys():
             if k not in self.vocab.keys():
                 self.vocab[k] = len(self.vocab)
-    # end merge_dict_to_vocab
+                # update incoming vocab
+            d[k] = self.vocab[k]
+    # end merge_and_update_dict_to_vocab
 
     def fit(self, corpus):
         if self.verbose > 0:
@@ -372,14 +394,14 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         self.melody_tokenizer.fit(corpus)
         if self.verbose > 0:
             print('Merging melody vocab')
-        self.merge_dict_to_vocab(self.melody_tokenizer.vocab)
+        self.merge_and_update_dict_to_vocab(self.melody_tokenizer.vocab)
         if self.verbose > 0:
             print('Training harmony tokenizer')
         self.harmony_tokenizer.fit(corpus)
         if self.verbose > 0:
             print('Merging harmony vocab')
-        self.merge_dict_to_vocab(self.harmony_tokenizer.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.merge_and_update_dict_to_vocab(self.harmony_tokenizer.vocab)
+        self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end fit
 
@@ -396,7 +418,7 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
             print('Processing harmony')
 
         harm_encoded = self.harmony_tokenizer.encode(file_path, add_start_harmony_token=add_start_harmony_token, max_length=None if max_length is None else max_length-len(melody_tokens), pad_to_max_length=pad_to_max_length)
-        harmony_tokens = harm_encoded['input_tokens'] 
+        harmony_tokens = harm_encoded['input_tokens']
         harmony_ids = harm_encoded['input_ids']
         harmony_attention_mask = harm_encoded['attention_mask']
 
@@ -531,7 +553,7 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
                         chord_token = f'{root}:{quality}'
                         #print(chord_token)
                         self.vocab[chord_token] = len(self.vocab)
-            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+            self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end init
 
@@ -605,7 +627,7 @@ class RootTypeTokenizer(HarmonyTokenizerBase):
                     quality_token = f'{quality}'
                     #print(chord_token)
                     self.vocab[quality_token] = len(self.vocab)
-            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+            self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end init
 
@@ -641,7 +663,7 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
             # chord pitch classes
             for pc in range(12):
                 self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
-            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+            self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end init
 
@@ -677,7 +699,7 @@ class RootPCTokenizer(HarmonyTokenizerBase):
                 self.vocab['chord_root_' + str(root)] = len(self.vocab)
             for pc in range(12):
                 self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
-            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+            self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end init
 
@@ -717,7 +739,7 @@ class GCTRootPCTokenizer(HarmonyTokenizerBase):
                 self.vocab['chord_root_' + str(root)] = len(self.vocab)
             for pc in range(12):
                 self.vocab['chord_pc_' + str(pc)] = len(self.vocab)
-            self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+            self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end init
 
@@ -808,7 +830,7 @@ class GCTSymbolTokenizer(HarmonyTokenizerBase):
                         tmp_token = str(g)
                         if tmp_token not in self.vocab.keys():
                             self.vocab[tmp_token] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end fit
 
@@ -886,7 +908,7 @@ class GCTRootTypeTokenizer(HarmonyTokenizerBase):
                         tmp_token = str(g[1:])
                         if tmp_token not in self.vocab.keys():
                             self.vocab[tmp_token] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+        self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end fit
 
@@ -951,7 +973,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
                 subdivision_part = int(round((quant_time - quarter_part) * 100))
                 time_token = f'position_{quarter_part}x{subdivision_part:02}'
                 self.vocab[time_token] = len(self.vocab)
-        self.ids_to_tokens = {v: k for k, v in self.vocab.items()} #TODO check with Max
+        self.update_ids_to_tokens()
+        self.unk_token_id = 0
         self.pad_token_id = 1
         self.bos_token_id = 2
         self.eos_token_id = 3
@@ -1005,9 +1028,13 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         return sorted(cleaned_signatures)
     # end infer_time_signatures_from_quantization
 
+    def update_ids_to_tokens(self):
+        self.ids_to_tokens = {v: k for k, v in self.vocab.items()}
+    # end update_ids_to_tokens
+
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self._added_tokens_encoder.get(tokens, self.unk_token_id))
+            return self.vocab.get(tokens, self.unk_token_id)
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
@@ -1259,8 +1286,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
             encoded = self.encode(file_path)
             melody_tokens = encoded['input_tokens']
             melody_ids = encoded['input_ids']
-            tokens.append(melody_tokens + [self.eos_token])
-            ids.append(melody_ids + [self.vocab[self.eos_token]])
+            tokens.append(melody_tokens)
+            ids.append(melody_ids)
         return {'tokens': tokens, 'ids': ids}
     # end transform
 

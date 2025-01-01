@@ -1,4 +1,4 @@
-from data_utils import MergedMelodyHarmonyDataset, MLMCollator
+from data_utils import MergedMelHarmDataset, MLMCollator
 import os
 import numpy as np
 from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
@@ -58,8 +58,8 @@ def main():
 
     tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
 
-    train_dataset = MergedMelodyHarmonyDataset(train_dir, tokenizer, max_length=2048)
-    val_dataset = MergedMelodyHarmonyDataset(val_dir, tokenizer, max_length=2048)
+    train_dataset = MergedMelHarmDataset(train_dir, tokenizer, max_length=2048)
+    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048)
     collator = MLMCollator(tokenizer)
 
     trainloader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
@@ -100,9 +100,9 @@ def main():
     
     # keep best validation loss for saving
     best_val_loss = np.inf
-    save_dir = 'saved_models/' + tokenizer_name + '/'
-    transformer_path = save_dir + tokenizer_name + '.pt'
+    save_dir = 'saved_models/mlm/' + tokenizer_name + '/'
     os.makedirs(save_dir, exist_ok=True)
+    transformer_path = save_dir + tokenizer_name + '.pt'
     saving_version = 0
 
     # Training loop
