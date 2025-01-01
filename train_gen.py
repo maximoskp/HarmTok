@@ -1,4 +1,4 @@
-from data_utils import MergedMelHarmDataset, MLMCollator
+from data_utils import MergedMelHarmDataset, GenCollator
 import os
 import numpy as np
 from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
@@ -6,7 +6,7 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     GCTSymbolTokenizer, GCTRootTypeTokenizer, MelodyPitchTokenizer, \
     MergedMelHarmTokenizer
 from torch.utils.data import DataLoader
-from transformers import RobertaConfig, RobertaForMaskedLM
+from transformers import AutoConfig, GPT2LMHeadModel
 import torch
 from torch.optim import AdamW
 from tqdm import tqdm
@@ -59,26 +59,26 @@ def main():
 
     tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
 
-    train_dataset = MergedMelHarmDataset(train_dir, tokenizer, max_length=2048)
-    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048)
-    collator = MLMCollator(tokenizer)
+    train_dataset = MergedMelHarmDataset(train_dir, tokenizer, max_length=2048, return_harmonization_labels=True)
+    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048, return_harmonization_labels=True)
+    collator = GenCollator(tokenizer)
 
     trainloader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
     valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
 
-    model_config = RobertaConfig(
+    config = AutoConfig.from_pretrained(
+        "gpt2",
         vocab_size=len(tokenizer.vocab),
-        hidden_size=256,
-        num_hidden_layers=4,
-        num_attention_heads=4,
+        n_positions=2048,
+        n_layer=4,
+        n_head=4,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
-        mask_token_id=tokenizer.vocab[tokenizer.mask_token],
-        max_position_embeddings=2048,
+        n_embd=256
     )
 
-    model = RobertaForMaskedLM(model_config)
+    model = GPT2LMHeadModel(config)
     model.train()
 
     if device_name == 'cpu':
@@ -92,8 +92,8 @@ def main():
     optimizer = AdamW(model.parameters(), lr=lr)
 
     # save results
-    os.makedirs('results/mlm', exist_ok=True)
-    results_path = 'results/mlm/' + tokenizer_name + '.csv'
+    os.makedirs('results/gen', exist_ok=True)
+    results_path = 'results/gen/' + tokenizer_name + '.csv'
     result_fields = ['epoch', 'train_loss', 'tran_acc', 'val_loss', 'val_acc', 'sav_version']
     with open( results_path, 'w' ) as f:
         writer = csv.writer(f)
@@ -101,7 +101,7 @@ def main():
     
     # keep best validation loss for saving
     best_val_loss = np.inf
-    save_dir = 'saved_models/mlm/' + tokenizer_name + '/'
+    save_dir = 'saved_models/gen/' + tokenizer_name + '/'
     os.makedirs(save_dir, exist_ok=True)
     transformer_path = save_dir + tokenizer_name + '.pt'
     saving_version = 0
@@ -118,9 +118,10 @@ def main():
             tepoch.set_description(f'Epoch {epoch} | trn')
             for batch in tepoch:
                 input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
                 labels = batch['labels'].to(device)
                 
-                outputs = model(input_ids, labels=labels)
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                 loss = outputs.loss
                 
                 optimizer.zero_grad()
@@ -149,9 +150,10 @@ def main():
                 tepoch.set_description(f'Epoch {epoch} | val')
                 for batch in tepoch:
                     input_ids = batch['input_ids'].to(device)
+                    attention_mask = batch['attention_mask'].to(device)
                     labels = batch['labels'].to(device)
                     
-                    outputs = model(input_ids, labels=labels)
+                    outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                     loss = outputs.loss
                     
                     # update loss
