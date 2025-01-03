@@ -57,7 +57,10 @@ def main():
     if args.batchsize:
         batchsize = args.batchsize
 
-    tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
+    melody_tokenizer = MelodyPitchTokenizer.from_pretrained('saved_tokenizers/MelodyPitchTokenizer')
+    harmony_tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
+
+    tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
     train_dataset = MergedMelHarmDataset(train_dir, tokenizer, max_length=2048)
     val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048)

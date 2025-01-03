@@ -37,9 +37,9 @@ class MergedMelHarmDataset(Dataset):
             labels = input_ids.clone()
             labels[:sep_token_idx + 1] = -100  # Ignore question tokens and <h> in loss computation
             return {
-                'input_ids': input_ids[:-1],
-                'attention_mask': attention_mask[:-1],
-                'labels': labels[1:]
+                'input_ids': input_ids,
+                'attention_mask': attention_mask,
+                'labels': labels
             }
         elif self.return_attention_mask:
             return {

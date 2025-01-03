@@ -57,7 +57,10 @@ def main():
     if args.batchsize:
         batchsize = args.batchsize
 
-    tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
+    melody_tokenizer = MelodyPitchTokenizer.from_pretrained('saved_tokenizers/MelodyPitchTokenizer')
+    harmony_tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
+
+    tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
     train_dataset = MergedMelHarmDataset(train_dir, tokenizer, max_length=2048, return_harmonization_labels=True)
     val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048, return_harmonization_labels=True)
@@ -133,7 +136,7 @@ def main():
                 running_loss += loss.item()
                 train_loss = running_loss/batch_num
                 # accuracy
-                predictions = outputs.logits.argmax(dim=-1)
+                predictions = outputs.logits.argmax(dim=-1).roll(0,1).roll(shifts=(0,1), dims=(0,1))
                 mask = labels != -100
                 running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                 train_accuracy = running_accuracy/batch_num
@@ -161,7 +164,7 @@ def main():
                     running_loss += loss.item()
                     val_loss = running_loss/batch_num
                     # accuracy
-                    predictions = outputs.logits.argmax(dim=-1)
+                    predictions = outputs.logits.argmax(dim=-1).roll(shifts=(0,1), dims=(0,1))
                     mask = labels != -100
                     running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                     val_accuracy = running_accuracy/batch_num
