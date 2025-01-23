@@ -114,7 +114,7 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self.unk_token_id)
+            return self.vocab[tokens]
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
@@ -370,7 +370,7 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self.unk_token_id)
+            return self.vocab[tokens]
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
@@ -1034,7 +1034,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self.unk_token_id)
+            return self.vocab[tokens]
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
