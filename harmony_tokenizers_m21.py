@@ -146,7 +146,21 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
             'G-': 'F#',
             'A-': 'G#',
             'B-': 'A#',
-            'B#': 'C'
+            'B#': 'C',
+            'C##': 'D',
+            'D##': 'E',
+            'E##': 'F#',
+            'F##': 'G',
+            'G##': 'A',
+            'A##': 'B',
+            'B##': 'C#',
+            'C--': 'A#',
+            'D--': 'C',
+            'E--': 'D',
+            'F--': 'D#',
+            'G--': 'F',
+            'A--': 'G',
+            'B--': 'A'
         }
 
         # Check if the root matches a special case
