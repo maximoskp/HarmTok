@@ -15,9 +15,9 @@ python train_mlm.py -t GCTRootTypeTokenizer -d /media/maindisk/maximos/data/hook
 -------------------------------------------------------------
 
 Generate
-python train_gen.py -t ChordSymbolTokenizer -d /media/maindisk/maximos/data/hooktheory_train -v /media/maindisk/maximos/data/hooktheory_test -g 0 -e 100 -l 5e-5 -b 30
-python train_gen.py -t RootTypeTokenizer -d /media/maindisk/maximos/data/hooktheory_train -v /media/maindisk/maximos/data/hooktheory_test -g 1 -e 100 -l 5e-5 -b 30
-python train_gen.py -t PitchClassTokenizer -d /media/maindisk/maximos/data/hooktheory_train -v /media/maindisk/maximos/data/hooktheory_test -g 2 -e 100 -l 5e-5 -b 30
+python train_gen.py -t ChordSymbolTokenizer -d /media/maindisk/maximos/data/hooktheory_train -v /media/maindisk/maximos/data/hooktheory_test -g 0 -e 100 -l 5e-5 -b 32
+python train_gen.py -t RootTypeTokenizer -d /media/maindisk/maximos/data/hooktheory_train -v /media/maindisk/maximos/data/hooktheory_test -g 1 -e 100 -l 5e-5 -b 32
+python train_gen.py -t PitchClassTokenizer -d /media/maindisk/maximos/data/hooktheory_train -v /media/maindisk/maximos/data/hooktheory_test -g 2 -e 100 -l 5e-5 -b 32
 
 python train_gen.py -t RootPCTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 0 -e 100 -l 5e-5 -b 30
 python train_gen.py -t GCTRootPCTokenizer -d /media/maindisk/maximos/data/hooktheory_xmls -v /media/maindisk/maximos/data/gjt_melodies/Library_melodies -g 1 -e 100 -l 5e-5 -b 30
