@@ -6,8 +6,9 @@ import random
 import os
 
 class MergedMelHarmDataset(Dataset):
-    def __init__(self, root_dir, merged_tokenizer, max_length=512, \
-                 return_attention_mask=False, return_harmonization_labels=False):
+    def __init__(self, root_dir, merged_tokenizer, max_length=512, pad_to_max_length=True, \
+                return_attention_mask=False, return_harmonization_labels=False,\
+                num_bars=8):
         # root_dir: the directory that includes subdirectories with mlx or xml files
         # Walk through all subdirectories and files
         self.data_files = []
@@ -18,6 +19,8 @@ class MergedMelHarmDataset(Dataset):
                     self.data_files.append(full_path)
         self.merged_tokenizer = merged_tokenizer
         self.max_length = max_length
+        self.pad_to_max_length = pad_to_max_length
+        self.num_bars = num_bars
         self.return_attention_mask = return_attention_mask
         self.return_harmonization_labels = return_harmonization_labels
     # end init
@@ -28,7 +31,14 @@ class MergedMelHarmDataset(Dataset):
 
     def __getitem__(self, idx):
         data_file = self.data_files[idx]
-        encoded = self.merged_tokenizer.encode(data_file, max_length=self.max_length, pad_to_max_length=True)
+        # adjust number of bars based no maximum length
+        tmp_encoded_len = self.max_length + 1
+        curr_num_bars = self.num_bars
+        while tmp_encoded_len > self.max_length:
+            encoded = self.merged_tokenizer.encode(data_file, max_length=self.max_length,\
+                            pad_to_max_length=self.pad_to_max_length, num_bars=curr_num_bars)
+            tmp_encoded_len = len(encoded['input_ids'])
+            curr_num_bars -= 1
         if self.return_harmonization_labels:
             input_ids = torch.tensor(encoded['input_ids'], dtype=torch.long)
             attention_mask = torch.tensor(encoded['attention_mask'], dtype=torch.long)

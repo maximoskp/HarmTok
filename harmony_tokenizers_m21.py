@@ -208,7 +208,8 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         return {'tokens': tokens, 'ids': ids}
     # end transform
 
-    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right', add_eos_token=True):
+    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, \
+               pad_to_max_length=False, padding_side='right', add_eos_token=True, num_bars=None):
         score = converter.parse(file_path)
         part = score.parts[0]  # Assume lead sheet
         measures = list(part.getElementsByClass('Measure'))
@@ -257,6 +258,16 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         if verbose > 0 and harmony_tokens.count(self.unk_token) > 0:
             unk_count = harmony_tokens.count(self.unk_token)
             print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
+
+        if num_bars is not None:
+            # get indexes of '<bar>'
+            bar_idxs = np.where( np.array(harmony_tokens) == '<bar>' )[0]
+            # check if bars number exceed current number of bars
+            if bar_idxs.size > num_bars+1:
+                bar_idx = bar_idxs[num_bars+1]
+                harmony_tokens = harmony_tokens[:bar_idx]
+                harmony_ids = harmony_ids[:bar_idx]
+                attention_mask = attention_mask[:bar_idx]
 
         if max_length is not None:
             if max_length > len(harmony_tokens) and pad_to_max_length:
@@ -405,11 +416,14 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         self.total_vocab_size = len(self.vocab)
     # end fit
 
-    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, pad_melody=False, padding_side='right'):
+    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0,\
+               pad_to_max_length=False, pad_melody=False, padding_side='right', num_bars=None):
         # first put melody tokens
         if self.verbose > 0:
             print('Processing melody') #TODO Need proper nested if/else
-        mel_encoded = self.melody_tokenizer.encode(file_path, max_length=None if max_length is None else max_length//2, pad_to_max_length=pad_melody)
+        mel_encoded = self.melody_tokenizer.encode(file_path,\
+            max_length=None if max_length is None else max_length//2,\
+            pad_to_max_length=pad_melody, num_bars=num_bars)
         melody_tokens = mel_encoded['input_tokens'] 
         melody_ids = mel_encoded['input_ids']
         melody_attention_mask = mel_encoded['attention_mask']
@@ -417,7 +431,10 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         if self.verbose > 0:
             print('Processing harmony')
 
-        harm_encoded = self.harmony_tokenizer.encode(file_path, add_start_harmony_token=add_start_harmony_token, max_length=None if max_length is None else max_length-len(melody_tokens), pad_to_max_length=pad_to_max_length)
+        harm_encoded = self.harmony_tokenizer.encode(file_path,\
+            add_start_harmony_token=add_start_harmony_token,\
+            max_length=None if max_length is None else max_length-len(melody_tokens),\
+            pad_to_max_length=pad_to_max_length, num_bars=num_bars)
         harmony_tokens = harm_encoded['input_tokens']
         harmony_ids = harm_encoded['input_ids']
         harmony_attention_mask = harm_encoded['attention_mask']
@@ -1055,7 +1072,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
         return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
 
-    def encode(self, file_path, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right'):
+    def encode(self, file_path, max_length=None, verbose=0, pad_to_max_length=False,\
+               padding_side='right', num_bars=None):
         unk_count = 0  # Counter to track '<unk>' tokens for the current file
         score = converter.parse(file_path)
         part = score.parts[0]  # Assume single melody line
@@ -1149,6 +1167,16 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         # Print a message if unknown tokens were generated for the current file
         if verbose > 0 and unk_count > 0:
             print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
+        
+        if num_bars is not None:
+            # get indexes of '<bar>'
+            bar_idxs = np.where( np.array(melody_tokens) == '<bar>' )[0]
+            # check if bars number exceed current number of bars
+            if bar_idxs.size > num_bars+1:
+                bar_idx = bar_idxs[num_bars+1]
+                melody_tokens = melody_tokens[:bar_idx]
+                melody_ids = melody_ids[:bar_idx]
+                attention_mask = attention_mask[:bar_idx]
         
         if max_length is not None:
             melody_tokens = melody_tokens[:max_length]
