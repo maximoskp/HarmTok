@@ -71,14 +71,14 @@ def main():
 
     model_config = RobertaConfig(
         vocab_size=len(tokenizer.vocab),
-        hidden_size=256,
-        num_hidden_layers=4,
-        num_attention_heads=4,
+        hidden_size=512,
+        num_hidden_layers=58,
+        num_attention_heads=8,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
         mask_token_id=tokenizer.vocab[tokenizer.mask_token],
-        max_position_embeddings=2048,
+        max_position_embeddings=512,
     )
 
     model = RobertaForMaskedLM(model_config)

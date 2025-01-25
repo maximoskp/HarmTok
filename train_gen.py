@@ -72,13 +72,13 @@ def main():
     config = AutoConfig.from_pretrained(
         "gpt2",
         vocab_size=len(tokenizer.vocab),
-        n_positions=2048,
-        n_layer=4,
-        n_head=4,
+        n_positions=512,
+        n_layer=8,
+        n_head=8,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
-        n_embd=256
+        n_embd=512
     )
 
     model = GPT2LMHeadModel(config)
