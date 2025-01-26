@@ -1,4 +1,4 @@
-from data_utils import MergedMelHarmDataset, GenCollator
+from data_utils import SeparatedMelHarmDataset
 import os
 import numpy as np
 from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
@@ -6,7 +6,7 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     GCTSymbolTokenizer, GCTRootTypeTokenizer, MelodyPitchTokenizer, \
     MergedMelHarmTokenizer
 from torch.utils.data import DataLoader
-from transformers import AutoConfig, GPT2LMHeadModel
+from transformers import BartForConditionalGeneration, BartConfig, DataCollatorForSeq2Seq
 import torch
 from torch.optim import AdamW
 from tqdm import tqdm
@@ -26,7 +26,7 @@ tokenizers = {
 def main():
 
     # Create the argument parser
-    parser = argparse.ArgumentParser(description='Script for MLM training a tiny RoBERTa model with a specific harmonic tokenizer.')
+    parser = argparse.ArgumentParser(description='Script for training BART model with a specific harmonic tokenizer.')
 
     # Define arguments
     parser.add_argument('-t', '--tokenizer', type=str, help='Specify the tokenizer name among: ' + repr(tokenizers.keys()), required=True)
@@ -62,30 +62,39 @@ def main():
 
     tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
-    train_dataset = MergedMelHarmDataset(train_dir, tokenizer, max_length=512, num_bars=64, return_harmonization_labels=True)
-    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=512, num_bars=64, return_harmonization_labels=True)
-    collator = GenCollator(tokenizer)
+    train_dataset = SeparatedMelHarmDataset(train_dir, tokenizer, max_length=512, num_bars=64)
+    val_dataset = SeparatedMelHarmDataset(val_dir, tokenizer, max_length=512, num_bars=64)
+
+    bart_config = BartConfig(
+        vocab_size=len(tokenizer.vocab),
+        pad_token_id=tokenizer.pad_token_id,
+        bos_token_id=tokenizer.bos_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+        decoder_start_token_id=tokenizer.bos_token_id,
+        forced_eos_token_id=tokenizer.eos_token_id,
+        max_position_embeddings=512,
+        encoder_layers=8,
+        encoder_attention_heads=8,
+        encoder_ffn_dim=512,
+        decoder_layers=8,
+        decoder_attention_heads=8,
+        decoder_ffn_dim=512,
+        d_model=512,
+        encoder_layerdrop=0.3,
+        decoder_layerdrop=0.3,
+        dropout=0.3
+    )
+
+    model = BartForConditionalGeneration(bart_config)
+    model.train()
+
+    def create_data_collator(tokenizer, model):
+        return DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model, padding=True)
+
+    collator = create_data_collator(tokenizer, model=model)
 
     trainloader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
     valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
-
-    config = AutoConfig.from_pretrained(
-        "gpt2",
-        vocab_size=len(tokenizer.vocab),
-        n_positions=512,
-        n_layer=8,
-        n_head=8,
-        pad_token_id=tokenizer.vocab[tokenizer.pad_token],
-        bos_token_id=tokenizer.vocab[tokenizer.bos_token],
-        eos_token_id=tokenizer.vocab[tokenizer.eos_token],
-        resid_pdrop=0.3,
-        embd_pdrop=0.3,
-        attn_pdrop=0.3,
-        n_embd=512
-    )
-
-    model = GPT2LMHeadModel(config)
-    model.train()
 
     if device_name == 'cpu':
         device = torch.device('cpu')
@@ -98,8 +107,8 @@ def main():
     optimizer = AdamW(model.parameters(), lr=lr)
 
     # save results
-    os.makedirs('results/gen', exist_ok=True)
-    results_path = 'results/gen/' + tokenizer_name + '.csv'
+    os.makedirs('results/bart', exist_ok=True)
+    results_path = 'results/bart/' + tokenizer_name + '.csv'
     result_fields = ['epoch', 'train_loss', 'tran_acc', 'val_loss', 'val_acc', 'sav_version']
     with open( results_path, 'w' ) as f:
         writer = csv.writer(f)
@@ -107,7 +116,7 @@ def main():
     
     # keep best validation loss for saving
     best_val_loss = np.inf
-    save_dir = 'saved_models/gen/' + tokenizer_name + '/'
+    save_dir = 'saved_models/bart/' + tokenizer_name + '/'
     os.makedirs(save_dir, exist_ok=True)
     transformer_path = save_dir + tokenizer_name + '.pt'
     saving_version = 0
@@ -127,7 +136,12 @@ def main():
                 attention_mask = batch['attention_mask'].to(device)
                 labels = batch['labels'].to(device)
                 
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                # Forward pass
+                outputs = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    labels=labels  # BART handles shifting internally
+                )
                 loss = outputs.loss
                 
                 optimizer.zero_grad()
@@ -159,7 +173,12 @@ def main():
                     attention_mask = batch['attention_mask'].to(device)
                     labels = batch['labels'].to(device)
                     
-                    outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                    # Forward pass
+                    outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        labels=labels  # BART handles shifting internally
+                    )
                     loss = outputs.loss
                     
                     # update loss
