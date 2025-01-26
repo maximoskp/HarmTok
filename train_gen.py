@@ -78,6 +78,9 @@ def main():
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
+        resid_pdrop=0.3,
+        embd_pdrop=0.3,
+        attn_pdrop=0.3,
         n_embd=512
     )
 
