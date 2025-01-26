@@ -32,13 +32,17 @@ class MergedMelHarmDataset(Dataset):
     def __getitem__(self, idx):
         data_file = self.data_files[idx]
         # adjust number of bars based no maximum length
-        tmp_encoded_len = self.max_length + 1
-        curr_num_bars = self.num_bars
-        while tmp_encoded_len > self.max_length:
+        if self.max_length is not None and self.num_bars is not None:
+            tmp_encoded_len = self.max_length + 1
+            curr_num_bars = self.num_bars
+            while tmp_encoded_len > self.max_length:
+                encoded = self.merged_tokenizer.encode(data_file, max_length=self.max_length,\
+                                pad_to_max_length=self.pad_to_max_length, num_bars=curr_num_bars)
+                tmp_encoded_len = len(encoded['input_ids'])
+                curr_num_bars -= 1
+        else:
             encoded = self.merged_tokenizer.encode(data_file, max_length=self.max_length,\
-                            pad_to_max_length=self.pad_to_max_length, num_bars=curr_num_bars)
-            tmp_encoded_len = len(encoded['input_ids'])
-            curr_num_bars -= 1
+                            pad_to_max_length=self.pad_to_max_length, num_bars=self.num_bars)
         if self.return_harmonization_labels:
             input_ids = torch.tensor(encoded['input_ids'], dtype=torch.long)
             attention_mask = torch.tensor(encoded['attention_mask'], dtype=torch.long)
