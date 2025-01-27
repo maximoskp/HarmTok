@@ -62,8 +62,8 @@ def main():
 
     tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
-    train_dataset = MergedMelHarmDataset(train_dir, tokenizer, max_length=2048)
-    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048)
+    train_dataset = MergedMelHarmDataset(train_dir, tokenizer, max_length=510, num_bars=64)
+    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=510, num_bars=64)
     collator = MLMCollator(tokenizer)
 
     trainloader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
@@ -72,13 +72,15 @@ def main():
     model_config = RobertaConfig(
         vocab_size=len(tokenizer.vocab),
         hidden_size=512,
-        num_hidden_layers=58,
+        num_hidden_layers=8,
         num_attention_heads=8,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
         mask_token_id=tokenizer.vocab[tokenizer.mask_token],
         max_position_embeddings=512,
+        hidden_dropout_prob = 0.3,
+        attention_probs_dropout_prob = 0.3
     )
 
     model = RobertaForMaskedLM(model_config)
