@@ -42,14 +42,23 @@ python train_bart.py -t GCTRootTypeTokenizer -d /media/maindisk/maximos/data/hoo
 ==================================================================================================================
 ==================================================================================================================
 
-Tokenized output on test set
+Tokenized output from gpt token by token on test set
 
-python produce_tokens_gen.py -t ChordSymbolTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
-python produce_tokens_gen.py -t RootTypeTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
-python produce_tokens_gen.py -t PitchClassTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
+python generate_tokbytok_gpt.py -t ChordSymbolTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
+python generate_tokbytok_gpt.py -t RootTypeTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
+python generate_tokbytok_gpt.py -t PitchClassTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
 
-python produce_tokens_gen.py -t RootPCTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
-python produce_tokens_gen.py -t GCTRootPCTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
-python produce_tokens_gen.py -t GCTSymbolTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
+python generate_tokbytok_gpt.py -t RootPCTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
+python generate_tokbytok_gpt.py -t GCTRootPCTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
+python generate_tokbytok_gpt.py -t GCTSymbolTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
 
-python produce_tokens_gen.py -t GCTRootTypeTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
+python generate_tokbytok_gpt.py -t GCTRootTypeTokenizer -v /media/maximos/9C33-6BBD/data/hooktheory_test -g -1 -b 5
+
+
+==================================================================================================================
+==================================================================================================================
+==================================================================================================================
+
+pure generation gpt
+
+python generate_gpt.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
