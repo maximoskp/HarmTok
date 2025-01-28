@@ -62,3 +62,26 @@ python generate_tokbytok_gpt.py -t GCTRootTypeTokenizer -v /media/maximos/9C33-6
 pure generation gpt
 
 python generate_gpt.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+python generate_gpt.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+python generate_gpt.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+
+python generate_gpt.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+python generate_gpt.py -t GCTRootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+python generate_gpt.py -t GCTSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+
+python generate_gpt.py -t GCTRootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+
+
+-------------------------------------------------------------------------------------
+
+pure generation bart
+
+python generate_bart.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+python generate_bart.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+python generate_bart.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+
+python generate_bart.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+python generate_bart.py -t GCTRootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+python generate_bart.py -t GCTSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+
+python generate_bart.py -t GCTRootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
