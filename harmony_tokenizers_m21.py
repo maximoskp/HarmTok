@@ -1,7 +1,7 @@
 # https://huggingface.co/docs/transformers/v4.47.1/en/internal/tokenization_utils#transformers.PreTrainedTokenizer
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer
-from music21 import converter, harmony, pitch, note, interval, stream, meter
+from music21 import converter, harmony, pitch, note, interval, stream, meter, chord
 import mir_eval
 from copy import deepcopy
 import numpy as np
@@ -623,39 +623,20 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
         """
         Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
         """
-        '''
-        a = [0,4,7,9]
-        c = m21.chord.Chord( a )
-        s = m21.m21.harmony.chordSymbolFromChord(c)
-        s.figure
-        '''
         # here we should have a trivial 1-element list with the token
         print(tokens)
         token = tokens[0]
-        if ':' not in token:
-            # Invalid chord symbol, return None
-            return None
-
-        # Split the token into root and quality
-        root_token, quality_token = token.split(':')
-
-        # Translate the quality token using the predefined mapping
-        music21_quality = TOKEN_TO_MUSIC21_QUALITY.get(quality_token, None)
-
-        if music21_quality is None:
-            print(f"Error: Unrecognized quality '{quality_token}' in token '{token}'")
-            return None
-
+        chord_symbol = None
         try:
-            # Construct the full chord symbol as a string
-            chord_symbol_str = f"{root_token}{music21_quality}"
-
-            # Create a ChordSymbol from the string
-            chord_symbol = harmony.ChordSymbol(chord_symbol_str)
-            return chord_symbol
-        except Exception as e:
-            print(f"Error constructing ChordSymbol for {token}: {e}")
-            return None
+            r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
+            pcs = np.where( t > 0 )[0]
+            c = chord.Chord( pcs.tolist() )
+            chord_symbol = harmony.chordSymbolFromChord( c )
+        except:
+            print('unknown chord symbol token: ', token)
+        
+        return chord_symbol
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
