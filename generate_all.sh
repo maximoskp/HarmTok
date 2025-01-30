@@ -2,13 +2,18 @@
 
 # List of Python scripts with their respective arguments
 
+# scripts=(
+#     "generate_gpt.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+#     "generate_gpt.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+#     "generate_gpt.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+#     "generate_bart.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+#     "generate_bart.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+#     "generate_bart.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+# )
+
 scripts=(
-    "generate_gpt.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
-    "generate_gpt.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
-    "generate_gpt.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
-    "generate_bart.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
-    "generate_bart.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
-    "generate_bart.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+    "generate_gpt.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+    "generate_bart.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
 )
 
 # Name of the conda environment
