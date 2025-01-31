@@ -624,17 +624,16 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
         Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
         """
         # here we should have a trivial 1-element list with the token
-        print(tokens)
         token = tokens[0]
         chord_symbol = None
         try:
             r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
-            pcs = np.where( t > 0 )[0]
+            pcs = r + np.where( t > 0 )[0]
             c = chord.Chord( pcs.tolist() )
             chord_symbol = harmony.chordSymbolFromChord( c )
         except:
             print('unknown chord symbol token: ', token)
-        
+        print(tokens, chord_symbol)
         return chord_symbol
     # end decode_chord_symbol
 
@@ -689,9 +688,22 @@ class RootTypeTokenizer(HarmonyTokenizerBase):
     # end handle_chord_symbol
 
     def decode_chord_symbol(self, tokens):
-        print(tokens)
-        pass
-    # end handle_chord_symbol
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a 2-element list with the root and quality tokens
+        token = tokens[0] + ':' + tokens[1]
+        chord_symbol = None
+        try:
+            r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
+            pcs = r + np.where( t > 0 )[0]
+            c = chord.Chord( pcs.tolist() )
+            chord_symbol = harmony.chordSymbolFromChord( c )
+        except:
+            print('unknown chord symbol token: ', token)
+        print(tokens, chord_symbol)
+        return chord_symbol
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -728,9 +740,16 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
     # end handle_chord_symbol
 
     def decode_chord_symbol(self, tokens):
-        print(tokens)
-        pass
-    # end handle_chord_symbol
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a list of pitch classes
+        pcs = [int(pc_token.split('_')[-1]) for pc_token in tokens ]
+        c = chord.Chord( pcs )
+        chord_symbol = harmony.chordSymbolFromChord( c )
+        print(tokens, chord_symbol)
+        return chord_symbol
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -773,9 +792,16 @@ class RootPCTokenizer(HarmonyTokenizerBase):
     # end handle_chord_symbol
 
     def decode_chord_symbol(self, tokens):
-        print(tokens)
-        pass
-    # end handle_chord_symbol
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a list of pitch classes - we don't care about the root for decoding
+        pcs = [int(pc_token.split('_')[-1]) for pc_token in tokens ]
+        c = chord.Chord( pcs )
+        chord_symbol = harmony.chordSymbolFromChord( c )
+        print(tokens, chord_symbol)
+        return chord_symbol
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -821,9 +847,16 @@ class GCTRootPCTokenizer(HarmonyTokenizerBase):
     # end handle_chord_symbol
 
     def decode_chord_symbol(self, tokens):
-        print(tokens)
-        pass
-    # end handle_chord_symbol
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a list of pitch classes - we don't care about the root for decoding
+        pcs = [int(pc_token.split('_')[-1]) for pc_token in tokens ]
+        c = chord.Chord( pcs )
+        chord_symbol = harmony.chordSymbolFromChord( c )
+        print(tokens, chord_symbol)
+        return chord_symbol
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
