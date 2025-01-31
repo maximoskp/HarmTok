@@ -2,6 +2,8 @@ data/
 saved_models/
 old/
 tokenized/
+musicXMLs/
+MIDIs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
