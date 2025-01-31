@@ -8,7 +8,7 @@ import numpy as np
 from GCT_functions import get_singe_GCT_of_chord as gct
 import os
 import json
-
+import ast
 
 INT_TO_ROOT_SHARP = {
     0: 'C',
@@ -927,9 +927,17 @@ class GCTSymbolTokenizer(HarmonyTokenizerBase):
     # end fit
 
     def decode_chord_symbol(self, tokens):
-        print(tokens)
-        pass
-    # end handle_chord_symbol
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a trivial 1-element list with the token
+        gct_list = ast.literal_eval(tokens[0])
+        pcs = gct_list[0] + np.array( gct_list[1:] )
+        c = chord.Chord( pcs.tolist() )
+        chord_symbol = harmony.chordSymbolFromChord( c )
+        print(tokens, chord_symbol)
+        return chord_symbol
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -1010,9 +1018,18 @@ class GCTRootTypeTokenizer(HarmonyTokenizerBase):
     # end fit
 
     def decode_chord_symbol(self, tokens):
-        print(tokens)
-        pass
-    # end handle_chord_symbol
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have two tokens, for root and GCT-type
+        r = int( tokens[0].split('_')[-1] )
+        gct_type = ast.literal_eval(tokens[0])
+        pcs = r + np.array( gct_type )
+        c = chord.Chord( pcs.tolist() )
+        chord_symbol = harmony.chordSymbolFromChord( c )
+        print(tokens, chord_symbol)
+        return chord_symbol
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
