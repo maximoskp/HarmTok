@@ -85,3 +85,10 @@ python generate_bart.py -t GCTRootPCTokenizer -v /media/maindisk/maximos/data/ho
 python generate_bart.py -t GCTSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
 
 python generate_bart.py -t GCTRootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5
+
+
+==================================================================================================================
+==================================================================================================================
+==================================================================================================================
+
+csvs to musicXMLs

@@ -484,6 +484,11 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
 
         # Step 2: Decode melody
         melody_part = self.melody_tokenizer.decode(melody_tokens)
+        # create a part for chords in midi format
+        chords_part = stream.Part()
+        chords_measure = None
+        # create a score that will hold both parts
+        score = stream.Score()
         measures = melody_part.getElementsByClass('Measure')  # Retrieve all measures from the melody
 
         # Step 3: Decode harmony and align with measures
@@ -501,6 +506,10 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
                 # Move to the next measure
                 if current_measure_index < len(measures) - 1:
                     current_measure_index += 1
+                    # create a new current measure for the chords track
+                    if chords_measure is not None:
+                        chords_part.append(chords_measure)
+                    chords_measure = stream.Measure(number=current_measure_index)
                 else:
                     print(f"Warning: Exceeded measure count when processing token '{token}'.")
                 quantized_time = 0  # Reset time for the new measure
@@ -521,7 +530,7 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
                     tokens.append(harmony_tokens[i])
                     i += 1
                 i -= 1
-                chord_symbol_obj = self.harmony_tokenizer.decode_chord_symbol(tokens)
+                chord_symbol_obj, chord_obj = self.harmony_tokenizer.decode_chord_symbol(tokens)
                 if chord_symbol_obj is not None:
                     # Ensure we do not exceed the number of measures
                     if current_measure_index < len(measures):
@@ -531,16 +540,24 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
                         measure.append(chord_symbol_obj) 
                         # fix quantized time in case it is added in the end. music21 bug?
                         measure.elements[-1].offset = quantized_time
-
+                        # add chord to the chords part
+                        chord_obj.offset = quantized_time
+                        chords_measure.append(chord_obj)
                     else:
                         print(f"Warning: Skipping chord '{token}' as no corresponding measure exists.")
             i += 1
         # end while
+        # add the remaining chords_measure
+        chords_part.append(chords_measure)
+        score.insert(0, melody_part)
+        score.insert(0, chords_part)
         # Step 4: Display or save the result
         if output_format == 'text':
             melody_part.show('text')
         elif output_format == 'file':
-            melody_part.write('musicxml', output_path)
+            # melody_part.write('musicxml', output_path)
+            score.write('musicxml', output_path)
+            # score.write('midi', output_path)
             print('Saved as', output_path)
     # end decode
 
@@ -626,15 +643,15 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
         # here we should have a trivial 1-element list with the token
         token = tokens[0]
         chord_symbol = None
+        c = None
         try:
             r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
-            pcs = r + np.where( t > 0 )[0]
+            pcs = r + np.where( t > 0 )[0] + 48
             c = chord.Chord( pcs.tolist() )
             chord_symbol = harmony.chordSymbolFromChord( c )
         except:
             print('unknown chord symbol token: ', token)
-        print(tokens, chord_symbol)
-        return chord_symbol
+        return chord_symbol, c
     # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -696,13 +713,12 @@ class RootTypeTokenizer(HarmonyTokenizerBase):
         chord_symbol = None
         try:
             r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
-            pcs = r + np.where( t > 0 )[0]
+            pcs = r + np.where( t > 0 )[0] + 48
             c = chord.Chord( pcs.tolist() )
             chord_symbol = harmony.chordSymbolFromChord( c )
         except:
             print('unknown chord symbol token: ', token)
-        print(tokens, chord_symbol)
-        return chord_symbol
+        return chord_symbol, c
     # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -744,11 +760,10 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
         Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
         """
         # here we should have a list of pitch classes
-        pcs = [int(pc_token.split('_')[-1]) for pc_token in tokens ]
+        pcs = [int(pc_token.split('_')[-1]) + 48 for pc_token in tokens ]
         c = chord.Chord( pcs )
         chord_symbol = harmony.chordSymbolFromChord( c )
-        print(tokens, chord_symbol)
-        return chord_symbol
+        return chord_symbol, c
     # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -796,11 +811,10 @@ class RootPCTokenizer(HarmonyTokenizerBase):
         Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
         """
         # here we should have a list of pitch classes - we don't care about the root for decoding
-        pcs = [int(pc_token.split('_')[-1]) for pc_token in tokens ]
+        pcs = [int(pc_token.split('_')[-1]) + 48 for pc_token in tokens ]
         c = chord.Chord( pcs )
         chord_symbol = harmony.chordSymbolFromChord( c )
-        print(tokens, chord_symbol)
-        return chord_symbol
+        return chord_symbol, c
     # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -851,11 +865,10 @@ class GCTRootPCTokenizer(HarmonyTokenizerBase):
         Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
         """
         # here we should have a list of pitch classes - we don't care about the root for decoding
-        pcs = [int(pc_token.split('_')[-1]) for pc_token in tokens ]
+        pcs = [int(pc_token.split('_')[-1]) + 48 for pc_token in tokens ]
         c = chord.Chord( pcs )
         chord_symbol = harmony.chordSymbolFromChord( c )
-        print(tokens, chord_symbol)
-        return chord_symbol
+        return chord_symbol, c
     # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -932,11 +945,10 @@ class GCTSymbolTokenizer(HarmonyTokenizerBase):
         """
         # here we should have a trivial 1-element list with the token
         gct_list = ast.literal_eval(tokens[0])
-        pcs = gct_list[0] + np.array( gct_list[1:] )
+        pcs = gct_list[0] + np.array( gct_list[1:] ) + 48
         c = chord.Chord( pcs.tolist() )
         chord_symbol = harmony.chordSymbolFromChord( c )
-        print(tokens, chord_symbol)
-        return chord_symbol
+        return chord_symbol, c
     # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
@@ -1024,11 +1036,10 @@ class GCTRootTypeTokenizer(HarmonyTokenizerBase):
         # here we should have two tokens, for root and GCT-type
         r = int( tokens[0].split('_')[-1] )
         gct_type = ast.literal_eval(tokens[0])
-        pcs = r + np.array( gct_type )
+        pcs = r + np.array( gct_type ) + 48
         c = chord.Chord( pcs.tolist() )
         chord_symbol = harmony.chordSymbolFromChord( c )
-        print(tokens, chord_symbol)
-        return chord_symbol
+        return chord_symbol, c
     # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
