@@ -58,7 +58,7 @@ def main():
 
     valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
 
-    model_path = 'saved_models/gen/' + tokenizer_name + '/' + tokenizer_name + '.pt'
+    model_path = 'saved_models/gpt/' + tokenizer_name + '/' + tokenizer_name + '.pt'
 
     config = AutoConfig.from_pretrained(
         "gpt2",

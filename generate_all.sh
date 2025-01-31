@@ -11,9 +11,13 @@
 #     "generate_bart.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
 # )
 
+# scripts=(
+#     "generate_gpt.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+#     "generate_bart.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
+# )
+
 scripts=(
     "generate_gpt.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
-    "generate_bart.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g -1 -b 5"
 )
 
 # Name of the conda environment
