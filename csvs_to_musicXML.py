@@ -33,7 +33,7 @@ for model in models:
         midi_folder = 'MIDIs/' + model + '/' + tokenizer_name + '/'
         os.makedirs(mxl_folder, exist_ok=True)
         os.makedirs(midi_folder, exist_ok=True)
-        for i in range(10): # range(len( c['melody'] )):
+        for i in range(len( c['melody'] )):
             x_real = c['melody'].iloc[i].split() + c['real'].iloc[i].split()
             x_gen = c['melody'].iloc[i].split() + c['generated'].iloc[i].split()
             tokenizer.decode(x_real, output_format='file', \
