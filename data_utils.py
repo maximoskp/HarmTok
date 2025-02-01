@@ -5,6 +5,7 @@ from harmony_tokenizers_m21 import MergedMelHarmTokenizer
 import random
 import os
 import numpy as np
+from transformers import DataCollatorForSeq2Seq
 
 class MergedMelHarmDataset(Dataset):
     def __init__(self, root_dir, merged_tokenizer, max_length=512, pad_to_max_length=True, \
@@ -191,3 +192,67 @@ class PureGenCollator:
         }
     # end call
 # end class PureGenCollator
+
+class MaskedGenCollator:
+    def __init__(self, tokenizer, mask_prob=0.2, bar_id=None):
+        self.tokenizer = tokenizer
+        self.pad_token_id = tokenizer.vocab[tokenizer.pad_token]
+        self.mask_prob = mask_prob
+        self.mask_token_id = tokenizer.mask_token_id  # Mask token ID
+        self.bar_id = bar_id
+    # end init
+
+    def __call__(self, batch):
+        # Apply masking before padding
+        masked_input_ids = []
+        for item in batch:
+            input_ids = item["input_ids"].clone()
+            for i in range(len(input_ids)):
+                if input_ids[i] != self.bar_id and random.random() < self.mask_prob:
+                    input_ids[i] = self.mask_token_id  # Replace with <mask>
+            masked_input_ids.append(input_ids)
+
+        input_ids = pad_sequence(masked_input_ids, batch_first=True, padding_value=self.pad_token_id)
+        attention_mask = pad_sequence([item["attention_mask"] for item in batch], batch_first=True, padding_value=0)
+        labels = pad_sequence([item["labels"] for item in batch], batch_first=True, padding_value=-100)
+        # also neutralize all that come pre-padded from the dataset
+        labels[ labels == self.pad_token_id ] = -100
+        
+        masked_input_ids = []
+        for ids in input_ids:
+            masked_ids = ids.clone()
+            for i in range(len(ids)):
+                if ids[i] != self.bar_id and random.random() < self.mask_prob:
+                    masked_ids[i] = self.mask_token_id
+            masked_input_ids.append(masked_ids)
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+    # end call
+# end class MaskedGenCollator
+
+class MaskedDataCollatorForSeq2Seq(DataCollatorForSeq2Seq):
+    def __init__(self, tokenizer, mask_prob=0.2, bar_id=None, **kwargs):
+        super().__init__(tokenizer, **kwargs)
+        self.mask_prob = mask_prob
+        self.mask_token_id = tokenizer.mask_token_id
+        self.bar_id = bar_id  # Token that should not be masked
+    # end init
+
+    def __call__(self, features):
+        batch = super().__call__(features)  # Get the default behavior
+        
+        # Apply masking only to the encoder input (input_ids)
+        masked_input_ids = batch["input_ids"].clone()
+        for i in range(masked_input_ids.shape[0]):  # Iterate over batch
+            for j in range(masked_input_ids.shape[1]):  # Iterate over sequence
+                if masked_input_ids[i, j] != self.bar_id and random.random() < self.mask_prob:
+                    masked_input_ids[i, j] = self.mask_token_id
+
+        batch["input_ids"] = masked_input_ids  # Replace with masked version
+        return batch
+    # end call
+# end class MaskedDataCollatorForSeq2Seq
