@@ -53,23 +53,23 @@ def main():
 
     tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
-    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048, return_harmonization_labels=True)
+    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=512, return_harmonization_labels=True)
     collator = GenCollator(tokenizer)
 
     valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
 
-    model_path = 'saved_models/gen/' + tokenizer_name + '/' + tokenizer_name + '.pt'
+    model_path = 'saved_models/gpt/' + tokenizer_name + '/' + tokenizer_name + '.pt'
 
     config = AutoConfig.from_pretrained(
         "gpt2",
         vocab_size=len(tokenizer.vocab),
-        n_positions=2048,
-        n_layer=4,
-        n_head=4,
+        n_positions=512,
+        n_layer=8,
+        n_head=8,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
-        n_embd=256
+        n_embd=512
     )
 
     model = GPT2LMHeadModel(config)
