@@ -7,7 +7,8 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     MergedMelHarmTokenizer
 import pandas as pd
 
-models = ['gpt', 'bart']
+# models = ['gpt', 'bart']
+models = ['gpt_reg', 'bart_reg']
 tokenizer_names = ['ChordSymbolTokenizer', 'RootTypeTokenizer', \
               'PitchClassTokenizer', 'RootPCTokenizer']
 # tokenizer_names = ['ChordSymbolTokenizer', 'RootTypeTokenizer', \
