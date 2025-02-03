@@ -531,7 +531,7 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
                     i += 1
                 i -= 1
                 chord_symbol_obj, chord_obj = self.harmony_tokenizer.decode_chord_symbol(tokens)
-                if chord_symbol_obj is not None:
+                if chord_symbol_obj is not None and chord_obj is not None:
                     # Ensure we do not exceed the number of measures
                     if current_measure_index < len(measures):
                         measure = measures[current_measure_index]
@@ -709,8 +709,12 @@ class RootTypeTokenizer(HarmonyTokenizerBase):
         Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
         """
         # here we should have a 2-element list with the root and quality tokens
-        token = tokens[0] + ':' + tokens[1]
+        if len(tokens) > 1:
+            token = tokens[0] + ':' + tokens[1]
+        else:
+            token = None
         chord_symbol = None
+        c = None
         try:
             r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
             pcs = r + np.where( t > 0 )[0] + 48
@@ -761,8 +765,13 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
         """
         # here we should have a list of pitch classes
         pcs = [int(pc_token.split('_')[-1]) + 48 for pc_token in tokens ]
-        c = chord.Chord( pcs )
-        chord_symbol = harmony.chordSymbolFromChord( c )
+        c = None
+        chord_symbol = None
+        try:
+            c = chord.Chord( pcs )
+            chord_symbol = harmony.chordSymbolFromChord( c )
+        except:
+            print(f'pcs not recognized: {pcs}')
         return chord_symbol, c
     # end decode_chord_symbol
 
@@ -812,8 +821,13 @@ class RootPCTokenizer(HarmonyTokenizerBase):
         """
         # here we should have a list of pitch classes - we don't care about the root for decoding
         pcs = [int(pc_token.split('_')[-1]) + 48 for pc_token in tokens ]
-        c = chord.Chord( pcs )
-        chord_symbol = harmony.chordSymbolFromChord( c )
+        c = None
+        chord_symbol = None
+        try:
+            c = chord.Chord( pcs )
+            chord_symbol = harmony.chordSymbolFromChord( c )
+        except:
+            print(f'pcs not recognized: {pcs}')
         return chord_symbol, c
     # end decode_chord_symbol
 
