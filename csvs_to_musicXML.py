@@ -7,8 +7,10 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     MergedMelHarmTokenizer
 import pandas as pd
 
-# models = ['gpt', 'bart']
-models = ['gpt_reg', 'bart_reg']
+tokenized_folders = ['gpt_1.0', 'gpt_0.8', 'gpt_1.2',\
+                     'bart_1.0', 'bart_0.8', 'bart_1.2']
+models = ['gpt', 'bart']
+# models = ['gpt_reg', 'bart_reg']
 tokenizer_names = ['ChordSymbolTokenizer', 'RootTypeTokenizer', \
               'PitchClassTokenizer', 'RootPCTokenizer']
 # tokenizer_names = ['ChordSymbolTokenizer', 'RootTypeTokenizer', \
@@ -23,15 +25,15 @@ tokenizers = {
     'GCTRootTypeTokenizer': GCTRootTypeTokenizer
 }
 
-for model in models:
+for tok_folder in tokenized_folders:
     for tokenizer_name in tokenizer_names:
         melody_tokenizer = MelodyPitchTokenizer.from_pretrained('saved_tokenizers/MelodyPitchTokenizer')
         harmony_tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
         tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
-        c = pd.read_csv( 'tokenized/' + model + '/' + \
+        c = pd.read_csv( 'tokenized/' + tok_folder + '/' + \
                         tokenizer_name + '.csv' )
-        mxl_folder = 'musicXMLs/' + model + '/' + tokenizer_name + '/'
-        midi_folder = 'MIDIs/' + model + '/' + tokenizer_name + '/'
+        mxl_folder = 'musicXMLs/' + tok_folder + '/' + tokenizer_name + '/'
+        midi_folder = 'MIDIs/' + tok_folder + '/' + tokenizer_name + '/'
         os.makedirs(mxl_folder, exist_ok=True)
         os.makedirs(midi_folder, exist_ok=True)
         for i in range(len( c['melody'] )):
