@@ -530,7 +530,12 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
                     tokens.append(harmony_tokens[i])
                     i += 1
                 i -= 1
-                chord_symbol_obj, chord_obj = self.harmony_tokenizer.decode_chord_symbol(tokens)
+                chord_symbol_obj = None
+                chord_obj = None
+                try:
+                    chord_symbol_obj, chord_obj = self.harmony_tokenizer.decode_chord_symbol(tokens)
+                except:
+                    print(f'cannot decode tokens: {tokens}')
                 if chord_symbol_obj is not None and chord_obj is not None:
                     # Ensure we do not exceed the number of measures
                     if current_measure_index < len(measures):
