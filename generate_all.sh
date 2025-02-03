@@ -28,9 +28,36 @@
 #     "generate_bart_reg.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -b 32"
 # )
 
+# scripts=(
+#     "generate_gpt_reg.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -b 64"
+#     "generate_bart_reg.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -b 64"
+# )
+
 scripts=(
-    "generate_gpt_reg.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -b 64"
-    "generate_bart_reg.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -b 64"
+    "generate_gpt.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -s 1.0 -b 32"
+    "generate_gpt.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -s 1.0 -b 32"
+    "generate_gpt.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -s 1.0 -b 32"
+    "generate_gpt.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -s 1.0 -b 32"
+    "generate_bart.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -s 1.0 -b 32"
+    "generate_bart.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -s 1.0 -b 32"
+    "generate_bart.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -s 1.0 -b 32"
+    "generate_bart.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -s 1.0 -b 32"
+    "generate_gpt.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -s 0.8 -b 32"
+    "generate_gpt.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -s 0.8 -b 32"
+    "generate_gpt.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -s 0.8 -b 32"
+    "generate_gpt.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -s 0.8 -b 32"
+    "generate_bart.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -s 0.8 -b 32"
+    "generate_bart.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -s 0.8 -b 32"
+    "generate_bart.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -s 0.8 -b 32"
+    "generate_bart.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -s 0.8 -b 32"
+    "generate_gpt.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -s 1.2 -b 32"
+    "generate_gpt.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -s 1.2 -b 32"
+    "generate_gpt.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -s 1.2 -b 32"
+    "generate_gpt.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -s 1.2 -b 32"
+    "generate_bart.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -s 1.2 -b 32"
+    "generate_bart.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -s 1.2 -b 32"
+    "generate_bart.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -s 1.2 -b 32"
+    "generate_bart.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 2 -s 1.2 -b 32"
 )
 
 # Name of the conda environment

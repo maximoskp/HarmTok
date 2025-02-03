@@ -33,6 +33,7 @@ def main():
     parser.add_argument('-t', '--tokenizer', type=str, help='Specify the tokenizer name among: ' + repr(tokenizers.keys()), required=True)
     parser.add_argument('-v', '--dataval', type=str, help='Specify the full path to the root folder of the validation xml/mxl files', required=True)
     parser.add_argument('-g', '--gpu', type=int, help='Specify whether and which GPU will be used by used by index. Not using this argument means use CPU.', required=False)
+    parser.add_argument('-s', '--temperature', type=float, help='Temperature for sampling. Defaults to 1.0.', required=False)
     parser.add_argument('-b', '--batchsize', type=int, help='Specify batch size. Defaults to 16.', required=False)
     
     # Parse the arguments
@@ -47,13 +48,16 @@ def main():
     batchsize = 16
     if args.batchsize:
         batchsize = args.batchsize
+    temperature = 1.0
+    if args.temperature:
+        temperature = args.temperature
 
     melody_tokenizer = MelodyPitchTokenizer.from_pretrained('saved_tokenizers/MelodyPitchTokenizer')
     harmony_tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
 
     tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
-    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048, return_harmonization_labels=True)
+    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=512, return_harmonization_labels=True)
     collator = PureGenCollator(tokenizer)
 
     valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
@@ -90,7 +94,7 @@ def main():
     model.eval()
     model.to(device)
 
-    output_folder = 'tokenized/gpt/'
+    output_folder = 'tokenized/gpt_' + str(temperature) + '/'
 
     os.makedirs(output_folder, exist_ok=True)
 
@@ -125,9 +129,9 @@ def main():
                     outputs = model.generate(
                         input_ids=input_ids.reshape(1, input_ids.shape[0]),
                         eos_token_id=tokenizer.eos_token_id,
-                        max_new_tokens=500,
-                        do_sample=False,
-                        temperature=1.0
+                        max_new_tokens=512,
+                        do_sample=True,
+                        temperature=temperature
                     )
                     for i in range(start_harmony_position, len(outputs[0]), 1):
                         generated_tokens.append( tokenizer.ids_to_tokens[ int(outputs[0][i]) ].replace(' ','x') )
