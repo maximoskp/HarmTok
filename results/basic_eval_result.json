@@ -1,1 +1,30 @@
-{"ChordSymbolTokenizer": {"correct_bar_predictions": 0.9309529632346947, "correct_new_chord_predictions": 0.9066162751758121, "correct_position_predictions": 0.8530354494570157, "correct_chord_predictions": 0.5773812371429938, "correct_root_predictions": 0.6157489355594891}, "RootTypeTokenizer": {"correct_bar_predictions": 0.9272845846580255, "correct_new_chord_predictions": 0.9175238004114242, "correct_position_predictions": 0.8596373726259389, "correct_chord_predictions": 0.554756908790571, "correct_root_predictions": 0.5951604982365284}, "PitchClassTokenizer": {"correct_bar_predictions": 0.9197847884568354, "correct_new_chord_predictions": 0.8997751518920729, "correct_position_predictions": 0.8514567286992297, "correct_chord_predictions": 0.5841266803808066, "correct_root_predictions": 0.0}, "RootPCTokenizer": {"correct_bar_predictions": 0.9038884812912693, "correct_new_chord_predictions": 0.9021671530402334, "correct_position_predictions": 0.8523656891355308, "correct_chord_predictions": 0.5971870066497632, "correct_root_predictions": 0.6479931110366933}}
+{
+    "ChordSymbolTokenizer": {
+        "correct_bar_predictions": 0.9309529632346947,
+        "correct_new_chord_predictions": 0.9066162751758121,
+        "correct_position_predictions": 0.8530354494570157,
+        "correct_chord_predictions": 0.5773812371429938,
+        "correct_root_predictions": 0.6157489355594891
+    },
+    "RootTypeTokenizer": {
+        "correct_bar_predictions": 0.9272845846580255,
+        "correct_new_chord_predictions": 0.9175238004114242,
+        "correct_position_predictions": 0.8596373726259389,
+        "correct_chord_predictions": 0.554756908790571,
+        "correct_root_predictions": 0.5951604982365284
+    },
+    "PitchClassTokenizer": {
+        "correct_bar_predictions": 0.9197847884568354,
+        "correct_new_chord_predictions": 0.8997751518920729,
+        "correct_position_predictions": 0.8514567286992297,
+        "correct_chord_predictions": 0.5841266803808066,
+        "correct_root_predictions": 0
+    },
+    "RootPCTokenizer": {
+        "correct_bar_predictions": 0.9038884812912693,
+        "correct_new_chord_predictions": 0.9021671530402334,
+        "correct_position_predictions": 0.8523656891355308,
+        "correct_chord_predictions": 0.5971870066497632,
+        "correct_root_predictions": 0.6479931110366933
+    }
+}

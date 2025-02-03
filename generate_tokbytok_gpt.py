@@ -27,7 +27,7 @@ tokenizers = {
 def main():
 
     # Create the argument parser
-    parser = argparse.ArgumentParser(description='Script for MLM training a tiny RoBERTa model with a specific harmonic tokenizer.')
+    parser = argparse.ArgumentParser(description='Script for generating token-by-token with GPT2.')
 
     # Define arguments
     parser.add_argument('-t', '--tokenizer', type=str, help='Specify the tokenizer name among: ' + repr(tokenizers.keys()), required=True)
@@ -98,6 +98,7 @@ def main():
         'labels': [],
         'predictions': []
     }
+    os.makedirs('tokenized/gen/', exist_ok=True)
     result_fields = ['labels', 'predictions']
     with open( 'tokenized/gen/' + tokenizer_name + '.csv', 'w' ) as f:
         writer = csv.writer(f)

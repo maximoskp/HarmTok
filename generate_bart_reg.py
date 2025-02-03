@@ -53,7 +53,7 @@ def main():
 
     tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
-    model_path = 'saved_models/bart/' + tokenizer_name + '/' + tokenizer_name + '.pt'
+    model_path = 'saved_models/bart_reg/' + tokenizer_name + '/' + tokenizer_name + '.pt'
 
     bart_config = BartConfig(
         vocab_size=len(tokenizer.vocab),
@@ -101,7 +101,7 @@ def main():
     model.eval()
     model.to(device)
 
-    output_folder = 'tokenized/bart/'
+    output_folder = 'tokenized/bart_reg/'
 
     os.makedirs(output_folder, exist_ok=True)
 

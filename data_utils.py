@@ -218,14 +218,6 @@ class MaskedGenCollator:
         # also neutralize all that come pre-padded from the dataset
         labels[ labels == self.pad_token_id ] = -100
         
-        masked_input_ids = []
-        for ids in input_ids:
-            masked_ids = ids.clone()
-            for i in range(len(ids)):
-                if ids[i] != self.bar_id and random.random() < self.mask_prob:
-                    masked_ids[i] = self.mask_token_id
-            masked_input_ids.append(masked_ids)
-
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
