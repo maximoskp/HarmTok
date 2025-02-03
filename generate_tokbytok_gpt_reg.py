@@ -1,4 +1,4 @@
-from data_utils import MergedMelHarmDataset, PureGenCollator
+from data_utils import MergedMelHarmDataset, GenCollator
 import os
 import numpy as np
 from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
@@ -27,7 +27,7 @@ tokenizers = {
 def main():
 
     # Create the argument parser
-    parser = argparse.ArgumentParser(description='Script for MLM training a tiny RoBERTa model with a specific harmonic tokenizer.')
+    parser = argparse.ArgumentParser(description='Script for generating token-by-token with regularized GPT2.')
 
     # Define arguments
     parser.add_argument('-t', '--tokenizer', type=str, help='Specify the tokenizer name among: ' + repr(tokenizers.keys()), required=True)
@@ -53,12 +53,12 @@ def main():
 
     tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
-    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=2048, return_harmonization_labels=True)
-    collator = PureGenCollator(tokenizer)
+    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=512, return_harmonization_labels=True)
+    collator = GenCollator(tokenizer)
 
     valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
 
-    model_path = 'saved_models/gpt/' + tokenizer_name + '/' + tokenizer_name + '.pt'
+    model_path = 'saved_models/gpt_reg/' + tokenizer_name + '/' + tokenizer_name + '.pt'
 
     config = AutoConfig.from_pretrained(
         "gpt2",
@@ -73,74 +73,76 @@ def main():
     )
 
     model = GPT2LMHeadModel(config)
-
-    if device_name == 'cpu':
-        device = torch.device('cpu')
-        checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
-    else:
-        if torch.cuda.is_available():
-            device = torch.device(device_name)
-            checkpoint = torch.load(model_path, weights_only=True)
-        else:
-            print('Selected device not available: ' + device_name)
-            checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
     
+    checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
     model.load_state_dict(checkpoint)
 
     model.eval()
+
+    if device_name == 'cpu':
+        device = torch.device('cpu')
+    else:
+        if torch.cuda.is_available():
+            device = torch.device(device_name)
+        else:
+            print('Selected device not available: ' + device_name)
     model.to(device)
 
-    output_folder = 'tokenized/gpt/'
-
-    os.makedirs(output_folder, exist_ok=True)
-
+    val_loss = 0
+    running_loss = 0
+    batch_num = 0
+    running_accuracy = 0
+    val_accuracy = 0
+    print('validation')
     tokenized = {
-        'melodies': [],
-        'real': [],
-        'generated': []
+        'labels': [],
+        'predictions': []
     }
-    result_fields = ['melody', 'real', 'generated']
-    with open( output_folder + tokenizer_name + '.csv', 'w' ) as f:
+    os.makedirs('tokenized/gen_reg/', exist_ok=True)
+    result_fields = ['labels', 'predictions']
+    with open( 'tokenized/gen_reg/' + tokenizer_name + '.csv', 'w' ) as f:
         writer = csv.writer(f)
         writer.writerow( result_fields )
     with torch.no_grad():
         with tqdm(valloader, unit='batch') as tepoch:
             tepoch.set_description(f'run')
             for batch in tepoch:
-                for b in batch['input_ids']:
-                    melody_tokens = []
-                    real_tokens = []
-                    generated_tokens = []
-                    # find the start harmony token
-                    start_harmony_position = np.where( b == tokenizer.vocab[tokenizer.harmony_tokenizer.start_harmony_token] )[0][0]
-                    real_ids = b
-                    input_ids = b[:(start_harmony_position+1)].to(device)
-                    for i in input_ids:
-                        melody_tokens.append( tokenizer.ids_to_tokens[ int(i) ].replace(' ','x') )
+                input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                labels = batch['labels'].to(device)
+                
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                loss = outputs.loss
+                
+                # update loss
+                batch_num += 1
+                running_loss += loss.item()
+                val_loss = running_loss/batch_num
+                # accuracy
+                predictions = outputs.logits.argmax(dim=-1).roll(shifts=(0,1), dims=(0,1))
+                mask = labels != -100
+                running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
+                val_accuracy = running_accuracy/batch_num
 
-                    for i in range(start_harmony_position, len(real_ids), 1):
-                        if real_ids[i] != tokenizer.pad_token_id:
-                            real_tokens.append( tokenizer.ids_to_tokens[ int(real_ids[i]) ].replace(' ','x') )
-                    
-                    outputs = model.generate(
-                        input_ids=input_ids.reshape(1, input_ids.shape[0]),
-                        eos_token_id=tokenizer.eos_token_id,
-                        max_new_tokens=500,
-                        do_sample=False,
-                        temperature=1.0
-                    )
-                    for i in range(start_harmony_position, len(outputs[0]), 1):
-                        generated_tokens.append( tokenizer.ids_to_tokens[ int(outputs[0][i]) ].replace(' ','x') )
-                    
-                    with open( output_folder + tokenizer_name + '.csv', 'a' ) as f:
+                for j in range(len( labels )):
+                    # create tokenized labels
+                    lab_sentence = labels[j]
+                    pred_sentence = predictions[j]
+                    tmp_label_toks = []
+                    tmp_pred_toks = []
+                    for i in range(len( lab_sentence )):
+                        if lab_sentence[i] > 0:
+                            tmp_label_toks.append( tokenizer.ids_to_tokens[ int(lab_sentence[i]) ].replace(' ','x') )
+                            tmp_pred_toks.append( tokenizer.ids_to_tokens[ int(pred_sentence[i]) ].replace(' ','x') )
+                    tokenized['labels'].append( tmp_label_toks )
+                    tokenized['predictions'].append( tmp_pred_toks )
+                    with open( 'tokenized/gen_reg/' + tokenizer_name + '.csv', 'a' ) as f:
                         writer = csv.writer(f)
-                        writer.writerow( [' '.join(melody_tokens), ' '.join(real_tokens), ' '.join(generated_tokens)] )
-
-                    tokenized['melodies'].append( melody_tokens )
-                    tokenized['real'].append( real_tokens )
-                    tokenized['generated'].append( generated_tokens )
+                        writer.writerow( [' '.join(tmp_label_toks), ' '.join(tmp_pred_toks)] )
+                
+                tepoch.set_postfix(loss=val_loss, accuracy=val_accuracy)
     # save all results to csv
-    with open(output_folder + tokenizer_name + '.pickle','wb') as handle:
+    with open('tokenized/gen_reg/' + tokenizer_name + '.pickle','wb') as handle:
         pickle.dump(tokenized, handle, protocol=pickle.HIGHEST_PROTOCOL)
 # end main
 
