@@ -547,7 +547,8 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
                         measure.elements[-1].offset = quantized_time
                         # add chord to the chords part
                         chord_obj.offset = quantized_time
-                        chords_measure.append(chord_obj)
+                        if chords_measure is not None:
+                            chords_measure.append(chord_obj)
                     else:
                         print(f"Warning: Skipping chord '{token}' as no corresponding measure exists.")
             i += 1
