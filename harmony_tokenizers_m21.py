@@ -554,7 +554,8 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
             i += 1
         # end while
         # add the remaining chords_measure
-        chords_part.append(chords_measure)
+        if chords_measure is not None:
+            chords_part.append(chords_measure)
         score.insert(0, melody_part)
         score.insert(0, chords_part)
         # Step 4: Display or save the result
