@@ -80,14 +80,14 @@ def main():
     )
 
     model = BartForConditionalGeneration(bart_config)
-
-    val_dataset = SeparatedMelHarmDataset(val_dir, tokenizer, max_length=512, num_bars=64)
+    
+    val_dataset = SeparatedMelHarmDataset(val_dir, tokenizer, max_length=512, num_bars=8)
     def create_data_collator(tokenizer, model):
         return DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model, padding=True)
 
     collator = create_data_collator(tokenizer, model=model)
 
-    valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
+    valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=False, collate_fn=collator)
 
     if device_name == 'cpu':
         device = torch.device('cpu')
