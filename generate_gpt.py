@@ -56,11 +56,11 @@ def main():
     harmony_tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
 
     tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
-
-    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=512, return_harmonization_labels=True)
+    
+    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=512, return_harmonization_labels=True, num_bars=8)
     collator = PureGenCollator(tokenizer)
 
-    valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
+    valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=False, collate_fn=collator)
 
     model_path = 'saved_models/gpt/' + tokenizer_name + '/' + tokenizer_name + '.pt'
 
