@@ -1,0 +1,19 @@
+
+    \begin{table}[h]
+        \centering
+        \renewcommand{\arraystretch}{1.2}
+        \begin{tabular}{lcccc}
+            \hline
+            \textbf{Metric} & \textbf{ChordSymbolTokenizer} & \textbf{RootTypeTokenizer} & \textbf{PitchClassTokenizer} & \textbf{RootPCTokenizer} \\
+            \hline
+            \textbf{correct bar predictions} & 0.9358 & 0.9336 & 0.9103 & 0.9241 \\
+        \textbf{correct new chord predictions} & 0.9122 & 0.9156 & 0.9058 & 0.9011 \\
+        \textbf{correct position predictions} & 0.8528 & 0.8605 & 0.8554 & 0.8503 \\
+        \textbf{correct chord predictions} & 0.5801 & 0.5612 & 0.5976 & 0.5799 \\
+        \textbf{correct root predictions} & 0.6185 & 0.6005 & 0.0000 & 0.6518 \\
+        \hline
+        \end{tabular}
+        \caption{Comparison of Tokenizer Performance on Various Metrics}
+        \label{tab:tokenizer_performance}
+    \end{table}
+    
