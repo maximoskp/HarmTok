@@ -111,6 +111,7 @@ class SeparatedMelHarmDataset(Dataset):
         input_ids = torch.tensor(encoded['input_ids'][:start_harmony_position], dtype=torch.long)
         attention_mask = torch.tensor(encoded['attention_mask'][:start_harmony_position], dtype=torch.long)
         labels = labels[start_harmony_position:]  # Ignore question tokens and <h> in loss computation
+        labels[ labels == self.merged_tokenizer.pad_token_id ] = -100
         return {
             'input_ids': input_ids,
             'attention_mask': attention_mask,
