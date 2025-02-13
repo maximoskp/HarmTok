@@ -109,7 +109,7 @@ def main():
     # save results
     os.makedirs('results/bart', exist_ok=True)
     results_path = 'results/bart/' + tokenizer_name + '.csv'
-    result_fields = ['epoch', 'train_loss', 'tran_acc', 'val_loss', 'val_acc', 'sav_version']
+    result_fields = ['epoch', 'train_loss', 'train_acc', 'val_loss', 'val_acc', 'sav_version']
     with open( results_path, 'w' ) as f:
         writer = csv.writer(f)
         writer.writerow( result_fields )
@@ -153,7 +153,7 @@ def main():
                 running_loss += loss.item()
                 train_loss = running_loss/batch_num
                 # accuracy
-                predictions = outputs.logits.argmax(dim=-1).roll(0,1).roll(shifts=(0,1), dims=(0,1))
+                predictions = outputs.logits.argmax(dim=-1)
                 mask = labels != -100
                 running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                 train_accuracy = running_accuracy/batch_num
@@ -186,7 +186,7 @@ def main():
                     running_loss += loss.item()
                     val_loss = running_loss/batch_num
                     # accuracy
-                    predictions = outputs.logits.argmax(dim=-1).roll(shifts=(0,1), dims=(0,1))
+                    predictions = outputs.logits.argmax(dim=-1)
                     mask = labels != -100
                     running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                     val_accuracy = running_accuracy/batch_num

@@ -1,1 +1,1 @@
-epoch,train_loss,tran_acc,val_loss,val_acc,sav_version
+epoch,train_loss,train_acc,val_loss,val_acc,sav_version

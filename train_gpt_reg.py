@@ -100,7 +100,7 @@ def main():
     # save results
     os.makedirs('results/gpt_reg', exist_ok=True)
     results_path = 'results/gpt_reg/' + tokenizer_name + '.csv'
-    result_fields = ['epoch', 'train_loss', 'tran_acc', 'val_loss', 'val_acc', 'sav_version']
+    result_fields = ['epoch', 'train_loss', 'train_acc', 'val_loss', 'val_acc', 'sav_version']
     with open( results_path, 'w' ) as f:
         writer = csv.writer(f)
         writer.writerow( result_fields )
