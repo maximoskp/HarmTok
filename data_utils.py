@@ -91,8 +91,6 @@ class SeparatedMelHarmDataset(Dataset):
 
     def __getitem__(self, idx):
         data_file = self.data_files[idx]
-        with open('debug_bart.txt', 'a') as the_file:
-            the_file.write(data_file)
         # adjust number of bars based no maximum length
         if self.max_length is not None and self.num_bars is not None:
             tmp_encoded_len = self.max_length + 1
