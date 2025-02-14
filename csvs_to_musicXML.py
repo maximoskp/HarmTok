@@ -16,9 +16,12 @@ tokenizers = {
     'GCTRootTypeTokenizer': GCTRootTypeTokenizer
 }
 
-tokenized_folders = ['gpt_0.8','gpt_1.0','gpt_1.2',\
-                    'bart_0.8','bart_1.0','bart_1.2',\
-                    'gpt_reg_0.8','gpt_reg_1.0','gpt_reg_1.2',\
+# tokenized_folders = ['gpt_0.8','gpt_1.0','gpt_1.2',\
+#                     'bart_0.8','bart_1.0','bart_1.2',\
+#                     'gpt_reg_0.8','gpt_reg_1.0','gpt_reg_1.2',\
+#                     'bart_reg_0.8','bart_reg_1.0','bart_reg_1.2']
+
+tokenized_folders = ['bart_0.8','bart_1.0','bart_1.2',\
                     'bart_reg_0.8','bart_reg_1.0','bart_reg_1.2']
 
 tokenizer_names = ['ChordSymbolTokenizer', 'RootTypeTokenizer', 'PitchClassTokenizer', 'RootPCTokenizer']
