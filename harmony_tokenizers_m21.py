@@ -1,14 +1,14 @@
 # https://huggingface.co/docs/transformers/v4.47.1/en/internal/tokenization_utils#transformers.PreTrainedTokenizer
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer
-from music21 import converter, harmony, pitch, note, interval, stream, meter
+from music21 import converter, harmony, pitch, note, interval, stream, meter, chord
 import mir_eval
 from copy import deepcopy
 import numpy as np
 from GCT_functions import get_singe_GCT_of_chord as gct
 import os
 import json
-
+import ast
 
 INT_TO_ROOT_SHARP = {
     0: 'C',
@@ -114,7 +114,7 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self.unk_token_id)
+            return self.vocab[tokens]
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
@@ -146,7 +146,21 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
             'G-': 'F#',
             'A-': 'G#',
             'B-': 'A#',
-            'B#': 'C'
+            'B#': 'C',
+            'C##': 'D',
+            'D##': 'E',
+            'E##': 'F#',
+            'F##': 'G',
+            'G##': 'A',
+            'A##': 'B',
+            'B##': 'C#',
+            'C--': 'A#',
+            'D--': 'C',
+            'E--': 'D',
+            'F--': 'D#',
+            'G--': 'F',
+            'A--': 'G',
+            'B--': 'A'
         }
 
         # Check if the root matches a special case
@@ -192,6 +206,10 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         raise NotImplementedError()
     # end handle_chord_symbol
 
+    def decode_chord_symbol(self, harmony_tokens):
+        raise NotImplementedError()
+    # end handle_chord_symbol
+
     def fit(self, corpus):
         pass
     # end fit
@@ -208,7 +226,8 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         return {'tokens': tokens, 'ids': ids}
     # end transform
 
-    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right', add_eos_token=True):
+    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, \
+               pad_to_max_length=False, padding_side='right', add_eos_token=True, num_bars=None):
         score = converter.parse(file_path)
         part = score.parts[0]  # Assume lead sheet
         measures = list(part.getElementsByClass('Measure'))
@@ -257,6 +276,16 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         if verbose > 0 and harmony_tokens.count(self.unk_token) > 0:
             unk_count = harmony_tokens.count(self.unk_token)
             print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
+
+        if num_bars is not None:
+            # get indexes of '<bar>'
+            bar_idxs = np.where( np.array(harmony_tokens) == '<bar>' )[0]
+            # check if bars number exceed current number of bars
+            if bar_idxs.size > num_bars+1:
+                bar_idx = bar_idxs[num_bars+1]
+                harmony_tokens = harmony_tokens[:bar_idx]
+                harmony_ids = harmony_ids[:bar_idx]
+                attention_mask = attention_mask[:bar_idx]
 
         if max_length is not None:
             if max_length > len(harmony_tokens) and pad_to_max_length:
@@ -370,7 +399,7 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self.unk_token_id)
+            return self.vocab[tokens]
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
@@ -405,11 +434,14 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         self.total_vocab_size = len(self.vocab)
     # end fit
 
-    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, pad_to_max_length=False, pad_melody=False, padding_side='right'):
+    def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0,\
+               pad_to_max_length=False, pad_melody=False, padding_side='right', num_bars=None):
         # first put melody tokens
         if self.verbose > 0:
             print('Processing melody') #TODO Need proper nested if/else
-        mel_encoded = self.melody_tokenizer.encode(file_path, max_length=None if max_length is None else max_length//2, pad_to_max_length=pad_melody)
+        mel_encoded = self.melody_tokenizer.encode(file_path,\
+            max_length=None if max_length is None else max_length//2,\
+            pad_to_max_length=pad_melody, num_bars=num_bars)
         melody_tokens = mel_encoded['input_tokens'] 
         melody_ids = mel_encoded['input_ids']
         melody_attention_mask = mel_encoded['attention_mask']
@@ -417,7 +449,10 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         if self.verbose > 0:
             print('Processing harmony')
 
-        harm_encoded = self.harmony_tokenizer.encode(file_path, add_start_harmony_token=add_start_harmony_token, max_length=None if max_length is None else max_length-len(melody_tokens), pad_to_max_length=pad_to_max_length)
+        harm_encoded = self.harmony_tokenizer.encode(file_path,\
+            add_start_harmony_token=add_start_harmony_token,\
+            max_length=None if max_length is None else max_length-len(melody_tokens),\
+            pad_to_max_length=pad_to_max_length, num_bars=num_bars)
         harmony_tokens = harm_encoded['input_tokens']
         harmony_ids = harm_encoded['input_ids']
         harmony_attention_mask = harm_encoded['attention_mask']
@@ -449,21 +484,32 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
 
         # Step 2: Decode melody
         melody_part = self.melody_tokenizer.decode(melody_tokens)
+        # create a part for chords in midi format
+        chords_part = stream.Part()
+        chords_measure = None
+        # create a score that will hold both parts
+        score = stream.Score()
         measures = melody_part.getElementsByClass('Measure')  # Retrieve all measures from the melody
 
         # Step 3: Decode harmony and align with measures
         current_measure_index = -1  # Track the measure being processed. -1 to fit the logic with the first bar
         quantized_time = 0  # Track the time position in the current measure
-
-        for token in harmony_tokens:
-            if token == self.bos_token:
-                continue
+        
+        i = 0
+        while i < len(harmony_tokens):
+            token = harmony_tokens[i]
+            if token == self.bos_token or token == '<h>':
+                pass
             elif token == self.eos_token:
                 break
             elif token == '<bar>':
                 # Move to the next measure
                 if current_measure_index < len(measures) - 1:
                     current_measure_index += 1
+                    # create a new current measure for the chords track
+                    if chords_measure is not None:
+                        chords_part.append(chords_measure)
+                    chords_measure = stream.Measure(number=current_measure_index)
                 else:
                     print(f"Warning: Exceeded measure count when processing token '{token}'.")
                 quantized_time = 0  # Reset time for the new measure
@@ -474,8 +520,23 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
                 quantized_time = quarter_part + subdivision_part / 100
             else:
                 # Decode the chord symbol
-                chord_symbol_obj = self.harmony_tokenizer.decode_chord_symbol(token)
-                if chord_symbol_obj is not None:
+                # collect tokens that correspond to the current chord
+                tokens = [token]
+                i += 1
+                while i < len(harmony_tokens) and \
+                        'bar' not in harmony_tokens[i] and \
+                        'position' not in harmony_tokens[i] and \
+                        '</s>' not in harmony_tokens[i]:
+                    tokens.append(harmony_tokens[i])
+                    i += 1
+                i -= 1
+                chord_symbol_obj = None
+                chord_obj = None
+                try:
+                    chord_symbol_obj, chord_obj = self.harmony_tokenizer.decode_chord_symbol(tokens)
+                except:
+                    print(f'cannot decode tokens: {tokens}')
+                if chord_symbol_obj is not None and chord_obj is not None:
                     # Ensure we do not exceed the number of measures
                     if current_measure_index < len(measures):
                         measure = measures[current_measure_index]
@@ -484,16 +545,28 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
                         measure.append(chord_symbol_obj) 
                         # fix quantized time in case it is added in the end. music21 bug?
                         measure.elements[-1].offset = quantized_time
-
+                        # add chord to the chords part
+                        chord_obj.offset = quantized_time
+                        if chords_measure is not None:
+                            chords_measure.append(chord_obj)
                     else:
                         print(f"Warning: Skipping chord '{token}' as no corresponding measure exists.")
-
+            i += 1
+        # end while
+        # add the remaining chords_measure
+        if chords_measure is not None:
+            chords_part.append(chords_measure)
+        score.insert(0, melody_part)
+        score.insert(0, chords_part)
         # Step 4: Display or save the result
         if output_format == 'text':
             melody_part.show('text')
         elif output_format == 'file':
-            melody_part.write('musicxml', output_path)
+            # melody_part.write('musicxml', output_path)
+            score.write('musicxml', output_path)
+            # score.write('midi', output_path)
             print('Saved as', output_path)
+    # end decode
 
     def transform(self, corpus, add_start_harmony_token=True):
         # first put melody tokens
@@ -570,34 +643,23 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
             harmony_ids.append(self.vocab[self.unk_token])
     # end handle_chord_symbol
 
-    def decode_chord_symbol(self, token):
+    def decode_chord_symbol(self, tokens):
         """
         Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
         """
-        if ':' not in token:
-            # Invalid chord symbol, return None
-            return None
-
-        # Split the token into root and quality
-        root_token, quality_token = token.split(':')
-
-        # Translate the quality token using the predefined mapping
-        music21_quality = TOKEN_TO_MUSIC21_QUALITY.get(quality_token, None)
-
-        if music21_quality is None:
-            print(f"Error: Unrecognized quality '{quality_token}' in token '{token}'")
-            return None
-
+        # here we should have a trivial 1-element list with the token
+        token = tokens[0]
+        chord_symbol = None
+        c = None
         try:
-            # Construct the full chord symbol as a string
-            chord_symbol_str = f"{root_token}{music21_quality}"
-
-            # Create a ChordSymbol from the string
-            chord_symbol = harmony.ChordSymbol(chord_symbol_str)
-            return chord_symbol
-        except Exception as e:
-            print(f"Error constructing ChordSymbol for {token}: {e}")
-            return None
+            r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
+            pcs = r + np.where( t > 0 )[0] + 48
+            c = chord.Chord( pcs.tolist() )
+            chord_symbol = harmony.chordSymbolFromChord( c )
+        except:
+            print('unknown chord symbol token: ', token)
+        return chord_symbol, c
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -649,6 +711,27 @@ class RootTypeTokenizer(HarmonyTokenizerBase):
             harmony_ids.append(self.vocab[self.unk_token])
     # end handle_chord_symbol
 
+    def decode_chord_symbol(self, tokens):
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a 2-element list with the root and quality tokens
+        if len(tokens) > 1:
+            token = tokens[0] + ':' + tokens[1]
+        else:
+            token = None
+        chord_symbol = None
+        c = None
+        try:
+            r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
+            pcs = r + np.where( t > 0 )[0] + 48
+            c = chord.Chord( pcs.tolist() )
+            chord_symbol = harmony.chordSymbolFromChord( c )
+        except:
+            print('unknown chord symbol token: ', token)
+        return chord_symbol, c
+    # end decode_chord_symbol
+
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
     # end __call__
@@ -682,6 +765,22 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
             harmony_tokens.append(self.unk_token)
             harmony_ids.append(self.vocab[self.unk_token])
     # end handle_chord_symbol
+
+    def decode_chord_symbol(self, tokens):
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a list of pitch classes
+        pcs = [int(pc_token.split('_')[-1]) + 48 for pc_token in tokens ]
+        c = None
+        chord_symbol = None
+        try:
+            c = chord.Chord( pcs )
+            chord_symbol = harmony.chordSymbolFromChord( c )
+        except:
+            print(f'pcs not recognized: {pcs}')
+        return chord_symbol, c
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -722,6 +821,22 @@ class RootPCTokenizer(HarmonyTokenizerBase):
             harmony_tokens.append(self.unk_token)
             harmony_ids.append(self.vocab[self.unk_token])
     # end handle_chord_symbol
+
+    def decode_chord_symbol(self, tokens):
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a list of pitch classes - we don't care about the root for decoding
+        pcs = [int(pc_token.split('_')[-1]) + 48 for pc_token in tokens ]
+        c = None
+        chord_symbol = None
+        try:
+            c = chord.Chord( pcs )
+            chord_symbol = harmony.chordSymbolFromChord( c )
+        except:
+            print(f'pcs not recognized: {pcs}')
+        return chord_symbol, c
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -765,6 +880,17 @@ class GCTRootPCTokenizer(HarmonyTokenizerBase):
             harmony_tokens.append(self.unk_token)
             harmony_ids.append(self.vocab[self.unk_token])
     # end handle_chord_symbol
+
+    def decode_chord_symbol(self, tokens):
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a list of pitch classes - we don't care about the root for decoding
+        pcs = [int(pc_token.split('_')[-1]) + 48 for pc_token in tokens ]
+        c = chord.Chord( pcs )
+        chord_symbol = harmony.chordSymbolFromChord( c )
+        return chord_symbol, c
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -833,6 +959,18 @@ class GCTSymbolTokenizer(HarmonyTokenizerBase):
         self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end fit
+
+    def decode_chord_symbol(self, tokens):
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have a trivial 1-element list with the token
+        gct_list = ast.literal_eval(tokens[0])
+        pcs = gct_list[0] + np.array( gct_list[1:] ) + 48
+        c = chord.Chord( pcs.tolist() )
+        chord_symbol = harmony.chordSymbolFromChord( c )
+        return chord_symbol, c
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -911,6 +1049,19 @@ class GCTRootTypeTokenizer(HarmonyTokenizerBase):
         self.update_ids_to_tokens()
         self.total_vocab_size = len(self.vocab)
     # end fit
+
+    def decode_chord_symbol(self, tokens):
+        """
+        Decode a tokenized chord symbol into a music21.harmony.ChordSymbol object using a predefined mapping.
+        """
+        # here we should have two tokens, for root and GCT-type
+        r = int( tokens[0].split('_')[-1] )
+        gct_type = ast.literal_eval(tokens[0])
+        pcs = r + np.array( gct_type ) + 48
+        c = chord.Chord( pcs.tolist() )
+        chord_symbol = harmony.chordSymbolFromChord( c )
+        return chord_symbol, c
+    # end decode_chord_symbol
 
     def __call__(self, corpus, add_start_harmony_token=True):
         return self.transform(corpus, add_start_harmony_token=add_start_harmony_token)
@@ -1034,7 +1185,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):
-            return self.vocab.get(tokens, self.unk_token_id)
+            return self.vocab[tokens]
         return [self.vocab[token] for token in tokens]
     # end convert_tokens_to_ids
 
@@ -1055,7 +1206,8 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         subdivision = int(round((closest_time - quarter) * 100))  # Convert to two-digit integer
         return f'position_{quarter}x{subdivision:02}'  # Format subdivision as two digits
 
-    def encode(self, file_path, max_length=None, verbose=0, pad_to_max_length=False, padding_side='right'):
+    def encode(self, file_path, max_length=None, verbose=0, pad_to_max_length=False,\
+               padding_side='right', num_bars=None):
         unk_count = 0  # Counter to track '<unk>' tokens for the current file
         score = converter.parse(file_path)
         part = score.parts[0]  # Assume single melody line
@@ -1149,6 +1301,16 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         # Print a message if unknown tokens were generated for the current file
         if verbose > 0 and unk_count > 0:
             print(f"File '{file_path}' generated {unk_count} '<unk>' tokens.")
+        
+        if num_bars is not None:
+            # get indexes of '<bar>'
+            bar_idxs = np.where( np.array(melody_tokens) == '<bar>' )[0]
+            # check if bars number exceed current number of bars
+            if bar_idxs.size > num_bars+1:
+                bar_idx = bar_idxs[num_bars+1]
+                melody_tokens = melody_tokens[:bar_idx]
+                melody_ids = melody_ids[:bar_idx]
+                attention_mask = attention_mask[:bar_idx]
         
         if max_length is not None:
             melody_tokens = melody_tokens[:max_length]
