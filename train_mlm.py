@@ -1,4 +1,4 @@
-from data_utils import MergedMelHarmDataset, MLMCollator
+from data_utils import MergedMelHarmDataset, MLMCollator, compute_token_entropy
 import os
 import numpy as np
 from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from transformers import RobertaConfig, RobertaForMaskedLM
 import torch
 from torch.optim import AdamW
+from torcheval.metrics.text import Perplexity
 from tqdm import tqdm
 import argparse
 import csv
@@ -96,10 +97,14 @@ def main():
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
 
+    perplexity_metric = Perplexity(ignore_index=-100).to(device)
+
     # save results
     os.makedirs('results/mlm', exist_ok=True)
     results_path = 'results/mlm/' + tokenizer_name + '.csv'
-    result_fields = ['epoch', 'train_loss', 'tran_acc', 'val_loss', 'val_acc', 'sav_version']
+    result_fields = ['epoch', 'train_loss', 'train_acc', \
+                    'train_ppl', 'train_te', 'val_loss', \
+                    'val_acc', 'val_ppl', 'val_te', 'sav_version']
     with open( results_path, 'w' ) as f:
         writer = csv.writer(f)
         writer.writerow( result_fields )
@@ -118,6 +123,10 @@ def main():
         batch_num = 0
         running_accuracy = 0
         train_accuracy = 0
+        running_perplexity = 0
+        train_perplexity = 0
+        running_token_entropy = 0
+        train_token_entropy = 0
         print('training')
         with tqdm(trainloader, unit='batch') as tepoch:
             tepoch.set_description(f'Epoch {epoch} | trn')
@@ -141,6 +150,13 @@ def main():
                 mask = labels != -100
                 running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                 train_accuracy = running_accuracy/batch_num
+                # perplexity
+                running_perplexity += perplexity_metric.update(outputs.logits, labels).compute().item()
+                train_perplexity = running_perplexity/batch_num
+                # token entropy
+                _, entropy_per_batch = compute_token_entropy(outputs.logits, labels, pad_token_id=-100)
+                running_token_entropy += entropy_per_batch
+                train_token_entropy = running_token_entropy/batch_num
                 
                 tepoch.set_postfix(loss=train_loss, accuracy=train_accuracy)
         val_loss = 0
@@ -148,6 +164,10 @@ def main():
         batch_num = 0
         running_accuracy = 0
         val_accuracy = 0
+        running_perplexity = 0
+        val_perplexity = 0
+        running_token_entropy = 0
+        val_token_entropy = 0
         print('validation')
         with torch.no_grad():
             with tqdm(valloader, unit='batch') as tepoch:
@@ -168,6 +188,13 @@ def main():
                     mask = labels != -100
                     running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                     val_accuracy = running_accuracy/batch_num
+                    # perplexity
+                    running_perplexity += perplexity_metric.update(outputs.logits, labels).compute().item()
+                    val_perplexity = running_perplexity/batch_num
+                    # token entropy
+                    _, entropy_per_batch = compute_token_entropy(outputs.logits, labels, pad_token_id=-100)
+                    running_token_entropy += entropy_per_batch
+                    val_token_entropy = running_token_entropy/batch_num
                     
                     tepoch.set_postfix(loss=val_loss, accuracy=val_accuracy)
         if best_val_loss > val_loss:
@@ -178,7 +205,11 @@ def main():
             print(f'validation: accuracy={val_accuracy}, loss={val_loss}')
         with open( results_path, 'a' ) as f:
             writer = csv.writer(f)
-            writer.writerow( [epoch, train_loss, train_accuracy, val_loss, val_accuracy, saving_version] )
+            writer.writerow( [epoch, train_loss, train_accuracy, \
+                            train_perplexity, train_token_entropy, \
+                            val_loss, val_accuracy, \
+                            val_perplexity, val_token_entropy, \
+                            saving_version] )
 # end main
 
 if __name__ == '__main__':

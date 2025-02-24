@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib
 import os
 
 save_path = 'results/figs/'
@@ -17,11 +18,13 @@ df_A = pd.read_csv("results/bart/ChordSymbolTokenizer.csv")
 epochs = df_A["epoch"]
 
 # Metrics to plot
-metrics = ["train_loss", "train_acc", "val_loss", "val_acc"]
+metrics = ["train_loss", "train_acc", "val_loss", "val_acc", "val_ppl", "val_te"]
 
 # Create subplots
 fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 axes = axes.flatten()
+
+matplotlib.rcParams.update({'font.size': 20})
 
 # Plot each metric
 for model in models:
@@ -33,7 +36,7 @@ for model in models:
             if metric in df.keys():
                 plt.plot(epochs, df[metric], label=label)
 
-        plt.title(f"{metric} Over Epochs")
+        # plt.title(f"{metric} Over Epochs")
         plt.xlabel("Epoch")
         plt.ylabel(metric)
         plt.legend()
