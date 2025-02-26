@@ -153,10 +153,10 @@ def main():
                 running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                 train_accuracy = running_accuracy/batch_num
                 # perplexity
-                running_perplexity += perplexity_metric.update(outputs.logits, labels).compute().item()
+                running_perplexity += perplexity_metric.update(outputs.logits, labels.roll(shifts=(0,-1), dims=(0,1))).compute().item()
                 train_perplexity = running_perplexity/batch_num
                 # token entropy
-                _, entropy_per_batch = compute_token_entropy(outputs.logits, labels, pad_token_id=-100)
+                _, entropy_per_batch = compute_token_entropy(outputs.logits, labels.roll(shifts=(0,-1), dims=(0,1)), pad_token_id=-100)
                 running_token_entropy += entropy_per_batch
                 train_token_entropy = running_token_entropy/batch_num
                 
@@ -192,10 +192,10 @@ def main():
                     running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                     val_accuracy = running_accuracy/batch_num
                     # perplexity
-                    running_perplexity += perplexity_metric.update(outputs.logits, labels).compute().item()
+                    running_perplexity += perplexity_metric.update(outputs.logits, labels.roll(shifts=(0,-1), dims=(0,1))).compute().item()
                     val_perplexity = running_perplexity/batch_num
                     # token entropy
-                    _, entropy_per_batch = compute_token_entropy(outputs.logits, labels, pad_token_id=-100)
+                    _, entropy_per_batch = compute_token_entropy(outputs.logits, labels.roll(shifts=(0,-1), dims=(0,1)), pad_token_id=-100)
                     running_token_entropy += entropy_per_batch
                     val_token_entropy = running_token_entropy/batch_num
                     
