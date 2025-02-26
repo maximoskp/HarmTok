@@ -7,7 +7,8 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     GCTSymbolTokenizer, GCTRootTypeTokenizer, MelodyPitchTokenizer, \
     MergedMelHarmTokenizer
 
-root_dir = '/media/maindisk/maximos/data/hooktheory_xmls/'
+# root_dir = '/media/maindisk/maximos/data/hooktheory_xmls/'
+root_dir = '/media/datadisk/datasets/hooktheory_xmls/'
 data_files = []
 
 # Walk through all subdirectories and files
@@ -58,14 +59,17 @@ def initialize_stats(key, tokenizer):
 # end initialize_stats
 
 def update_stats(key, toks):
+    all_ids = []
     for t in toks['ids']:
         stats[key]['seq_lens'].append( len(t) )
         stats[key]['compression_rates'].append( compute_compression_rate(np.array(t)) )
+        all_ids += t
     stats[key]['mean_len'] = np.mean(stats[key]['seq_lens'])
     stats[key]['std_len'] = np.std(stats[key]['seq_lens'])
     stats[key]['max_len'] = np.max(stats[key]['seq_lens'])
     stats[key]['mean_compression'] = np.mean(stats[key]['compression_rates'])
     stats[key]['std_compression'] = np.std(stats[key]['compression_rates'])
+    stats[key]['total_compression'] = compute_compression_rate(np.array(all_ids))
 # end update_stats
 
 def print_stats(key):
@@ -75,6 +79,7 @@ def print_stats(key):
     print('max len: ', stats[key]['max_len'])
     print('mean cr: ', stats[key]['mean_compression'])
     print('std cr: ', stats[key]['std_compression'])
+    print('total cr: ', stats[key]['total_compression'])
 
 print('ChordSymbolTokenizer_m21')
 chordSymbolTokenizer = ChordSymbolTokenizer()
