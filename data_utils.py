@@ -24,7 +24,7 @@ def compute_normalized_token_entropy(logits, target_ids, pad_token_id=None):
     # Infer vocabulary size from logits shape
     vocab_size = logits.shape[-1]
     # Compute max possible entropy for normalization
-    max_entropy = torch.log2(torch.tensor(vocab_size, dtype=torch.float32))
+    max_entropy = torch.log2(torch.tensor(vocab_size, dtype=torch.float32)).item()
 
     # Compute probabilities with softmax
     probs = F.softmax(logits, dim=-1)  # Shape: (batch_size, seq_len, vocab_size)
