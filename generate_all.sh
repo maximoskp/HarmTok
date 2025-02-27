@@ -90,10 +90,14 @@
 
 # tokbytok
 scripts=(
-    "generate_tokbytok_gpt.py -t ChordSymbolTokenizer -v /mnt/ssd2/maximos/data/hooktheory_test -g 0 -b 1"
-    "generate_tokbytok_gpt.py -t RootTypeTokenizer -v /mnt/ssd2/maximos/data/hooktheory_test -g 0 -b 1"
-    "generate_tokbytok_gpt.py -t PitchClassTokenizer -v /mnt/ssd2/maximos/data/hooktheory_test -g 0 -b 1"
-    "generate_tokbytok_gpt.py -t RootPCTokenizer -v /mnt/ssd2/maximos/data/hooktheory_test -g 0 -b 1"
+    "generate_tokbytok_gpt.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -b 1"
+    "generate_tokbytok_gpt.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -b 1"
+    "generate_tokbytok_gpt.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -b 1"
+    "generate_tokbytok_gpt.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 0 -b 1"
+    "generate_tokbytok_bart.py -t ChordSymbolTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -b 1"
+    "generate_tokbytok_bart.py -t RootTypeTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -b 1"
+    "generate_tokbytok_bart.py -t PitchClassTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -b 1"
+    "generate_tokbytok_bart.py -t RootPCTokenizer -v /media/maindisk/maximos/data/hooktheory_test -g 1 -b 1"
 )
 
 # Name of the conda environment

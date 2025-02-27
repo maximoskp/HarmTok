@@ -1,7 +1,7 @@
 import json
 
-for file_name in ["results/basic_eval_result", \
-                  "results/basic_eval_reg_result"]:
+for file_name in ["results/tokbytok_eval_gpt", \
+                  "results/tokbytok_eval_bart"]:
     # Load JSON data from file
     with open(file_name + '.json', "r") as f:
         data = json.load(f)

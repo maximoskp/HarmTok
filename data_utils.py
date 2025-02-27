@@ -8,7 +8,7 @@ import numpy as np
 from transformers import DataCollatorForSeq2Seq
 import torch.nn.functional as F
 
-def compute_token_entropy(logits, target_ids, pad_token_id=None):
+def compute_normalized_token_entropy(logits, target_ids, pad_token_id=None):
     """
     Computes Expected Bits per Token (Token Entropy) for a batch.
     
@@ -21,6 +21,11 @@ def compute_token_entropy(logits, target_ids, pad_token_id=None):
         entropy_per_token (torch.Tensor): Average entropy per token for each sequence.
         entropy_per_batch (float): Average entropy per token across the batch.
     """
+    # Infer vocabulary size from logits shape
+    vocab_size = logits.shape[-1]
+    # Compute max possible entropy for normalization
+    max_entropy = torch.log2(torch.tensor(vocab_size, dtype=torch.float32))
+
     # Compute probabilities with softmax
     probs = F.softmax(logits, dim=-1)  # Shape: (batch_size, seq_len, vocab_size)
     
@@ -41,7 +46,7 @@ def compute_token_entropy(logits, target_ids, pad_token_id=None):
     # Compute overall batch entropy
     entropy_per_batch = entropy_per_token.mean().item()
 
-    return entropy_per_token, entropy_per_batch
+    return entropy_per_token/max_entropy, entropy_per_batch/max_entropy
 # end compute_token_entropy
 
 class MergedMelHarmDataset(Dataset):

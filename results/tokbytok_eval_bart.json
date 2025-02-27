@@ -1,0 +1,30 @@
+{
+    "ChordSymbolTokenizer": {
+        "correct_bar_predictions": 0.9363332518138094,
+        "correct_new_chord_predictions": 0.9092474764387887,
+        "correct_position_predictions": 0.8511218485384873,
+        "correct_chord_predictions": 0.5848442807252547,
+        "correct_root_predictions": 0.6237382193943453
+    },
+    "RootTypeTokenizer": {
+        "correct_bar_predictions": 0.9183174370261677,
+        "correct_new_chord_predictions": 0.9106348371047218,
+        "correct_position_predictions": 0.8456680859206812,
+        "correct_chord_predictions": 0.531229072726461,
+        "correct_root_predictions": 0.583284968078932
+    },
+    "PitchClassTokenizer": {
+        "correct_bar_predictions": 0.8928833455612619,
+        "correct_new_chord_predictions": 0.8999665119839257,
+        "correct_position_predictions": 0.8363871214658183,
+        "correct_chord_predictions": 0.5758981964311343,
+        "correct_root_predictions": 0
+    },
+    "RootPCTokenizer": {
+        "correct_bar_predictions": 0.8584821064644983,
+        "correct_new_chord_predictions": 0.9111132373343539,
+        "correct_position_predictions": 0.845381045782902,
+        "correct_chord_predictions": 0.5795340381763383,
+        "correct_root_predictions": 0.6317753432521648
+    }
+}

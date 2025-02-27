@@ -1,4 +1,4 @@
-from data_utils import SeparatedMelHarmDataset, compute_token_entropy
+from data_utils import SeparatedMelHarmDataset, compute_normalized_token_entropy
 import os
 import numpy as np
 from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
@@ -170,7 +170,7 @@ def main():
                 running_perplexity += perplexity_metric.update(outputs.logits, labels).compute().item()
                 train_perplexity = running_perplexity/batch_num
                 # token entropy
-                _, entropy_per_batch = compute_token_entropy(outputs.logits, labels, pad_token_id=-100)
+                _, entropy_per_batch = compute_normalized_token_entropy(outputs.logits, labels, pad_token_id=-100)
                 running_token_entropy += entropy_per_batch
                 train_token_entropy = running_token_entropy/batch_num
                 
@@ -214,7 +214,7 @@ def main():
                     running_perplexity += perplexity_metric.update(outputs.logits, labels).compute().item()
                     val_perplexity = running_perplexity/batch_num
                     # token entropy
-                    _, entropy_per_batch = compute_token_entropy(outputs.logits, labels, pad_token_id=-100)
+                    _, entropy_per_batch = compute_normalized_token_entropy(outputs.logits, labels, pad_token_id=-100)
                     running_token_entropy += entropy_per_batch
                     val_token_entropy = running_token_entropy/batch_num
                     

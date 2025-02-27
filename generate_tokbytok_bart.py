@@ -1,4 +1,4 @@
-from data_utils import MergedMelHarmDataset, GenCollator
+from data_utils import SeparatedMelHarmDataset
 import os
 import numpy as np
 from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
@@ -6,7 +6,7 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     GCTSymbolTokenizer, GCTRootTypeTokenizer, MelodyPitchTokenizer, \
     MergedMelHarmTokenizer
 from torch.utils.data import DataLoader
-from transformers import AutoConfig, GPT2LMHeadModel
+from transformers import BartForConditionalGeneration, BartConfig, DataCollatorForSeq2Seq
 import torch
 from torch.optim import AdamW
 from tqdm import tqdm
@@ -53,39 +53,52 @@ def main():
 
     tokenizer = MergedMelHarmTokenizer(melody_tokenizer, harmony_tokenizer)
 
-    val_dataset = MergedMelHarmDataset(val_dir, tokenizer, max_length=512, return_harmonization_labels=True)
-    collator = GenCollator(tokenizer)
+    model_path = 'saved_models/bart/' + tokenizer_name + '/' + tokenizer_name + '.pt'
 
-    valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=True, collate_fn=collator)
-
-    model_path = 'saved_models/gpt/' + tokenizer_name + '/' + tokenizer_name + '.pt'
-
-    config = AutoConfig.from_pretrained(
-        "gpt2",
+    bart_config = BartConfig(
         vocab_size=len(tokenizer.vocab),
-        n_positions=512,
-        n_layer=8,
-        n_head=8,
-        pad_token_id=tokenizer.vocab[tokenizer.pad_token],
-        bos_token_id=tokenizer.vocab[tokenizer.bos_token],
-        eos_token_id=tokenizer.vocab[tokenizer.eos_token],
-        n_embd=512
+        pad_token_id=tokenizer.pad_token_id,
+        bos_token_id=tokenizer.bos_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+        decoder_start_token_id=tokenizer.bos_token_id,
+        forced_eos_token_id=tokenizer.eos_token_id,
+        max_position_embeddings=512,
+        encoder_layers=8,
+        encoder_attention_heads=8,
+        encoder_ffn_dim=512,
+        decoder_layers=8,
+        decoder_attention_heads=8,
+        decoder_ffn_dim=512,
+        d_model=512,
+        encoder_layerdrop=0.3,
+        decoder_layerdrop=0.3,
+        dropout=0.3
     )
 
-    model = GPT2LMHeadModel(config)
+    model = BartForConditionalGeneration(bart_config)
     
-    checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
-    model.load_state_dict(checkpoint)
+    val_dataset = SeparatedMelHarmDataset(val_dir, tokenizer, max_length=512, num_bars=8)
+    def create_data_collator(tokenizer, model):
+        return DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model, padding=True)
 
-    model.eval()
+    collator = create_data_collator(tokenizer, model=model)
+
+    valloader = DataLoader(val_dataset, batch_size=batchsize, shuffle=False, collate_fn=collator)
 
     if device_name == 'cpu':
         device = torch.device('cpu')
+        checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
     else:
         if torch.cuda.is_available():
             device = torch.device(device_name)
+            checkpoint = torch.load(model_path, weights_only=True)
         else:
             print('Selected device not available: ' + device_name)
+            checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
+
+    model.load_state_dict(checkpoint)
+
+    model.eval()
     model.to(device)
 
     val_loss = 0
@@ -99,7 +112,7 @@ def main():
         'predictions': []
     }
 
-    save_dir = 'tok_by_tok/gpt/'
+    save_dir = 'tok_by_tok/bart/'
     os.makedirs('tok_by_tok/', exist_ok=True)
     os.makedirs(save_dir, exist_ok=True)
 
@@ -123,7 +136,7 @@ def main():
                 running_loss += loss.item()
                 val_loss = running_loss/batch_num
                 # accuracy
-                predictions = outputs.logits.argmax(dim=-1).roll(shifts=(0,1), dims=(0,1))
+                predictions = outputs.logits.argmax(dim=-1)
                 mask = labels != -100
                 running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
                 val_accuracy = running_accuracy/batch_num
