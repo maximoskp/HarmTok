@@ -98,9 +98,13 @@ def main():
         'labels': [],
         'predictions': []
     }
-    os.makedirs('tokenized/gen/', exist_ok=True)
+
+    save_dir = 'tokenized/gpt/'
+    os.makedirs('tok_by_tok/', exist_ok=True)
+    os.makedirs(save_dir, exist_ok=True)
+
     result_fields = ['labels', 'predictions']
-    with open( 'tokenized/gen/' + tokenizer_name + '.csv', 'w' ) as f:
+    with open( save_dir + tokenizer_name + '.csv', 'w' ) as f:
         writer = csv.writer(f)
         writer.writerow( result_fields )
     with torch.no_grad():
@@ -136,13 +140,13 @@ def main():
                             tmp_pred_toks.append( tokenizer.ids_to_tokens[ int(pred_sentence[i]) ].replace(' ','x') )
                     tokenized['labels'].append( tmp_label_toks )
                     tokenized['predictions'].append( tmp_pred_toks )
-                    with open( 'tokenized/gen/' + tokenizer_name + '.csv', 'a' ) as f:
+                    with open( save_dir + tokenizer_name + '.csv', 'a' ) as f:
                         writer = csv.writer(f)
                         writer.writerow( [' '.join(tmp_label_toks), ' '.join(tmp_pred_toks)] )
                 
                 tepoch.set_postfix(loss=val_loss, accuracy=val_accuracy)
     # save all results to csv
-    with open('tokenized/gen/' + tokenizer_name + '.pickle','wb') as handle:
+    with open(save_dir + tokenizer_name + '.pickle','wb') as handle:
         pickle.dump(tokenized, handle, protocol=pickle.HIGHEST_PROTOCOL)
 # end main
 
