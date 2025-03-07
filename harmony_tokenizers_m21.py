@@ -1,7 +1,7 @@
 # https://huggingface.co/docs/transformers/v4.47.1/en/internal/tokenization_utils#transformers.PreTrainedTokenizer
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer
-from music21 import converter, harmony, pitch, note, interval, stream, meter, chord
+from music21 import converter, harmony, pitch, note, interval, stream, meter, chord, duration
 import mir_eval
 from copy import deepcopy
 import numpy as np
@@ -9,6 +9,7 @@ from GCT_functions import get_singe_GCT_of_chord as gct
 import os
 import json
 import ast
+from copy import deepcopy
 
 INT_TO_ROOT_SHARP = {
     0: 'C',
@@ -479,14 +480,16 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         except ValueError:
             raise ValueError("The token sequence does not contain an '<h>' token to separate melody and harmony.")
 
-        melody_tokens = token_sequence[:split_index]
+        melody_tokens = token_sequence[:split_index + 1]
         harmony_tokens = token_sequence[split_index + 1:]  # Exclude the <h> token
 
         # Step 2: Decode melody
         melody_part = self.melody_tokenizer.decode(melody_tokens)
+        melody_for_midi = deepcopy(melody_part)
         # create a part for chords in midi format
         chords_part = stream.Part()
         chords_measure = None
+        chords_in_measure = []
         # create a score that will hold both parts
         score = stream.Score()
         measures = melody_part.getElementsByClass('Measure')  # Retrieve all measures from the melody
@@ -494,78 +497,124 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         # Step 3: Decode harmony and align with measures
         current_measure_index = -1  # Track the measure being processed. -1 to fit the logic with the first bar
         quantized_time = 0  # Track the time position in the current measure
+
+        # Auxilliary function to calculate durations for Chord objects
+        def get_current_measure(measures, current_measure_index):
+            if current_measure_index < len(measures):
+                return measures[current_measure_index]
+            else:
+                # Default to the last measure if index exceeds melody measures
+                return measures[-1]
         
         i = 0
         while i < len(harmony_tokens):
             token = harmony_tokens[i]
-            if token == self.bos_token or token == '<h>':
-                pass
+            if token in [self.bos_token, '<h>']:
+                i += 1
+                continue
             elif token == self.eos_token:
                 break
             elif token == '<bar>':
-                # Move to the next measure
-                if current_measure_index < len(measures) - 1:
-                    current_measure_index += 1
-                    # create a new current measure for the chords track
-                    if chords_measure is not None:
-                        chords_part.append(chords_measure)
-                    chords_measure = stream.Measure(number=current_measure_index)
-                else:
-                    print(f"Warning: Exceeded measure count when processing token '{token}'.")
-                quantized_time = 0  # Reset time for the new measure
-            elif token.startswith('position_'):
-                # Update the quantized time position
-                position = token.split('_')[1]
-                quarter_part, subdivision_part = map(int, position.split('x'))
-                quantized_time = quarter_part + subdivision_part / 100
-            else:
-                # Decode the chord symbol
-                # collect tokens that correspond to the current chord
-                tokens = [token]
+                # At measure boundary: finalize previous measure chords
+                if chords_measure is not None:
+                    current_measure = get_current_measure(measures, current_measure_index)
+                    ts = current_measure.getTimeSignatures(returnDefault=True)[0]
+                    measure_length = ts.barDuration.quarterLength
+
+                    for idx, (ch_offset, ch_obj) in enumerate(chords_in_measure):
+                        if idx < len(chords_in_measure) - 1:
+                            next_offset = chords_in_measure[idx + 1][0]
+                            chord_duration = next_offset - ch_offset
+                        else:
+                            chord_duration = measure_length - ch_offset
+                        if chord_duration <= 0:
+                            print(f"Invalid duration ({chord_duration}), adjusted to minimal duration.")
+                            chord_duration = 0.25
+                        ch_obj.duration = duration.Duration(chord_duration)
+                        chords_measure.insert(ch_offset, ch_obj)
+
+                # Initialize next measure clearly here:
+                current_measure_index += 1
+                chords_measure = stream.Measure(number=current_measure_index + 1)
+                current_measure = get_current_measure(measures, current_measure_index)
+                if current_measure.timeSignature is not None:  # if there is a new TS in the melody measure
+                    chords_measure.timeSignature = deepcopy(current_measure.timeSignature)
+
+                chords_part.append(chords_measure)
+                chords_in_measure = []
+                quantized_time = 0
                 i += 1
-                while i < len(harmony_tokens) and \
-                        'bar' not in harmony_tokens[i] and \
-                        'position' not in harmony_tokens[i] and \
-                        '</s>' not in harmony_tokens[i]:
-                    tokens.append(harmony_tokens[i])
+                continue
+
+            elif token.startswith('position_'):
+                pos = token.split('_')[1]
+                quarter_part, subdivision_part = map(int, pos.split('x'))
+                quantized_time = quarter_part + subdivision_part / 100
+                i += 1
+                continue
+
+            else:
+                # Collect chord tokens
+                chord_tokens = [token]
+                i += 1
+                while (i < len(harmony_tokens) and 
+                        'bar' not in harmony_tokens[i] and
+                        'position' not in harmony_tokens[i] and
+                        harmony_tokens[i] != '</s>'):
+                    chord_tokens.append(harmony_tokens[i])
                     i += 1
-                i -= 1
-                chord_symbol_obj = None
-                chord_obj = None
+
                 try:
-                    chord_symbol_obj, chord_obj = self.harmony_tokenizer.decode_chord_symbol(tokens)
+                    chord_symbol_obj, chord_obj = self.harmony_tokenizer.decode_chord_symbol(chord_tokens)
                 except:
-                    print(f'cannot decode tokens: {tokens}')
-                if chord_symbol_obj is not None and chord_obj is not None:
-                    # Ensure we do not exceed the number of measures
+                    print(f'cannot decode tokens: {chord_tokens}')
+
+                if chord_symbol_obj and chord_obj:
                     if current_measure_index < len(measures):
                         measure = measures[current_measure_index]
-                        # Add chord symbol at the quantized time
                         chord_symbol_obj.offset = quantized_time
-                        measure.append(chord_symbol_obj) 
-                        # fix quantized time in case it is added in the end. music21 bug?
-                        measure.elements[-1].offset = quantized_time
-                        # add chord to the chords part
-                        chord_obj.offset = quantized_time
-                        if chords_measure is not None:
-                            chords_measure.append(chord_obj)
-                            chords_measure.elements[-1].offset = quantized_time
-                    else:
-                        print(f"Warning: Skipping chord '{token}' as no corresponding measure exists.")
-            i += 1
-        # end while
-        # add the remaining chords_measure
-        if chords_measure is not None:
-            chords_part.append(chords_measure)
-        score.insert(0, melody_part)
+                        measure.insert(quantized_time, chord_symbol_obj)
+
+                    # Store chord offset and object to calculate duration later
+                    chords_in_measure.append((quantized_time, chord_obj))
+
+        # AFTER LOOP, handle any remaining chords in the final measure
+        if chords_measure is not None and chords_in_measure:
+            melody_measure = get_current_measure(measures, current_measure_index)
+            if melody_measure.timeSignature is not None: 
+                chords_measure.timeSignature = deepcopy(melody_measure.timeSignature)
+
+
+            ts = melody_measure.getTimeSignatures(returnDefault=True)[0]
+            measure_length = ts.barDuration.quarterLength
+
+            for idx, (ch_offset, ch_obj) in enumerate(chords_in_measure):
+                if idx < len(chords_in_measure) - 1:
+                    next_offset = chords_in_measure[idx + 1][0]
+                    chord_duration = next_offset - ch_offset
+                else:
+                    chord_duration = measure_length - ch_offset
+                if chord_duration <= 0:
+                    print(f"Invalid duration ({chord_duration}), adjusted to minimal duration.")
+                    chord_duration = 0.25
+                ch_obj.duration = duration.Duration(chord_duration)
+                chords_measure.insert(ch_offset, ch_obj)
+
+        # Assuming chords_part is your music21 stream.Part
+        # for measure in chords_part.getElementsByClass('Measure'):
+        #    print(f"Measure {measure.measureNumber}:")
+        #    for elem in measure.notesAndRests:
+        #        print(f"  Offset {elem.offset}: Chord {elem}, Duration {elem.duration.quarterLength}")
+
+        score.insert(0, melody_for_midi)
         score.insert(0, chords_part)
         # Step 4: Display or save the result
         if output_format == 'text':
-            melody_part.show('text')
+            # melody_part.show('text')
+            score.show('text')
         elif output_format == 'file':
-            # melody_part.write('musicxml', output_path)
             score.write('musicxml', output_path)
-            # score.write('midi', output_path)
+            # melody_part.write('musicxml', output_path)
             print('Saved as', output_path)
     # end decode
 
@@ -1364,7 +1413,7 @@ class MelodyPitchTokenizer(PreTrainedTokenizer):
         for token in tokens:
             if token == self.bos_token:
                 continue
-            elif token == self.eos_token:
+            elif token == '<h>': # harmony token
                 # Finalize the last measure and stop
                 current_measure = finalize_measure(current_measure, bar_length, last_position)
                 if current_measure is not None and len(current_measure.elements) > 0:

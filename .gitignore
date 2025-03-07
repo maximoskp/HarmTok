@@ -5,6 +5,7 @@ tokenized/
 tok_by_tok/
 musicXMLs/
 MIDIs/
+results/old_MIDIs/
 *.zip
 
 # Byte-compiled / optimized / DLL files
