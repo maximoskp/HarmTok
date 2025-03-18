@@ -702,6 +702,8 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
         chord_symbol = None
         c = None
         try:
+            if token[-1] == ':':
+                token = token[:-1]
             r, t, _ = mir_eval.chord.encode( token, reduce_extended_chords=True )
             pcs = r + np.where( t > 0 )[0] + 48
             c = chord.Chord( pcs.tolist() )
