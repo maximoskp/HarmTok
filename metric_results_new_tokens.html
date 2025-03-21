@@ -1,0 +1,646 @@
+
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Metrics Results by Model</title>
+        <style>
+          table { border-collapse: collapse; margin-bottom: 30px; }
+          th, td { border: 1px solid black; padding: 5px; text-align: center; }
+          caption { caption-side: top; font-weight: bold; font-size: 1.2em; margin-bottom: 10px; }
+        </style>
+      </head>
+      <body>
+        
+    <div style="margin-bottom: 30px;">
+      <h2>Metrics Information</h2>
+      <ul>
+         <li><strong>CHE</strong>: Chord Histogram Entropy</li>
+         <li><strong>CC</strong>: Chord Coverage</li>
+         <li><strong>CTD</strong>: Chord Tonal Distance</li>
+         <li><strong>CTnCTR</strong>: Chord Tone to Non-Chord Tone Ratio</li>
+         <li><strong>PCS</strong>: Pitch Consonance Score</li>
+         <li><strong>MCTD</strong>: Melody-chord Tonal Distance</li>
+         <li><strong>HRHE_i</strong>: Harmonic Rhythm Histogram Entropy (inter-chords intervals) </li>
+         <li><strong>HRC_i</strong>: Harmonic Rhythm Coverage</li>
+         <li><strong>HRHE_o</strong>: Harmonic Rhythm Histogram Entropy (chord onsets) </li>
+         <li><strong>HRC_o</strong>: Harmonic Rhythm Coverage</li>
+         <li><strong>CBS</strong>: Chord Beat Strength</li>
+      </ul>
+    </div>
+    
+        <style type="text/css">
+#T_648c7_row1_col9, #T_648c7_row1_col10, #T_648c7_row1_col11, #T_648c7_row2_col3, #T_648c7_row2_col4, #T_648c7_row2_col5, #T_648c7_row2_col7, #T_648c7_row3_col1, #T_648c7_row3_col2, #T_648c7_row3_col6, #T_648c7_row3_col8 {
+  background-color: lightgreen;
+}
+</style>
+<table id="T_648c7">
+  <caption><h2>Model: bart_0.8</h2></caption>
+  <thead>
+    <tr>
+      <th class="blank level0" >&nbsp;</th>
+      <th id="T_648c7_level0_col0" class="col_heading level0 col0" >Representation</th>
+      <th id="T_648c7_level0_col1" class="col_heading level0 col1" >CHE</th>
+      <th id="T_648c7_level0_col2" class="col_heading level0 col2" >CC</th>
+      <th id="T_648c7_level0_col3" class="col_heading level0 col3" >CTD</th>
+      <th id="T_648c7_level0_col4" class="col_heading level0 col4" >HRHE_i</th>
+      <th id="T_648c7_level0_col5" class="col_heading level0 col5" >HRC_i</th>
+      <th id="T_648c7_level0_col6" class="col_heading level0 col6" >HRHE_o</th>
+      <th id="T_648c7_level0_col7" class="col_heading level0 col7" >HRC_o</th>
+      <th id="T_648c7_level0_col8" class="col_heading level0 col8" >CBS</th>
+      <th id="T_648c7_level0_col9" class="col_heading level0 col9" >CTnCTR</th>
+      <th id="T_648c7_level0_col10" class="col_heading level0 col10" >PCS</th>
+      <th id="T_648c7_level0_col11" class="col_heading level0 col11" >MCTD</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th id="T_648c7_level0_row0" class="row_heading level0 row0" >0</th>
+      <td id="T_648c7_row0_col0" class="data row0 col0" >Ground Truth</td>
+      <td id="T_648c7_row0_col1" class="data row0 col1" >1.360868</td>
+      <td id="T_648c7_row0_col2" class="data row0 col2" >4.667108</td>
+      <td id="T_648c7_row0_col3" class="data row0 col3" >0.898123</td>
+      <td id="T_648c7_row0_col4" class="data row0 col4" >0.566575</td>
+      <td id="T_648c7_row0_col5" class="data row0 col5" >2.345467</td>
+      <td id="T_648c7_row0_col6" class="data row0 col6" >0.686278</td>
+      <td id="T_648c7_row0_col7" class="data row0 col7" >2.791529</td>
+      <td id="T_648c7_row0_col8" class="data row0 col8" >0.442459</td>
+      <td id="T_648c7_row0_col9" class="data row0 col9" >0.837180</td>
+      <td id="T_648c7_row0_col10" class="data row0 col10" >0.480865</td>
+      <td id="T_648c7_row0_col11" class="data row0 col11" >1.344500</td>
+    </tr>
+    <tr>
+      <th id="T_648c7_level0_row1" class="row_heading level0 row1" >1</th>
+      <td id="T_648c7_row1_col0" class="data row1 col0" >ChordSymbolTokenizer</td>
+      <td id="T_648c7_row1_col1" class="data row1 col1" >1.164005</td>
+      <td id="T_648c7_row1_col2" class="data row1 col2" >3.794176</td>
+      <td id="T_648c7_row1_col3" class="data row1 col3" >0.922328</td>
+      <td id="T_648c7_row1_col4" class="data row1 col4" >0.310675</td>
+      <td id="T_648c7_row1_col5" class="data row1 col5" >1.690933</td>
+      <td id="T_648c7_row1_col6" class="data row1 col6" >0.465966</td>
+      <td id="T_648c7_row1_col7" class="data row1 col7" >2.156850</td>
+      <td id="T_648c7_row1_col8" class="data row1 col8" >0.286795</td>
+      <td id="T_648c7_row1_col9" class="data row1 col9" >0.784593</td>
+      <td id="T_648c7_row1_col10" class="data row1 col10" >0.419969</td>
+      <td id="T_648c7_row1_col11" class="data row1 col11" >1.418517</td>
+    </tr>
+    <tr>
+      <th id="T_648c7_level0_row2" class="row_heading level0 row2" >2</th>
+      <td id="T_648c7_row2_col0" class="data row2 col0" >PitchClassTokenizer</td>
+      <td id="T_648c7_row2_col1" class="data row2 col1" >1.255908</td>
+      <td id="T_648c7_row2_col2" class="data row2 col2" >4.207672</td>
+      <td id="T_648c7_row2_col3" class="data row2 col3" >0.917663</td>
+      <td id="T_648c7_row2_col4" class="data row2 col4" >0.439947</td>
+      <td id="T_648c7_row2_col5" class="data row2 col5" >2.066799</td>
+      <td id="T_648c7_row2_col6" class="data row2 col6" >0.543595</td>
+      <td id="T_648c7_row2_col7" class="data row2 col7" >2.432540</td>
+      <td id="T_648c7_row2_col8" class="data row2 col8" >0.332814</td>
+      <td id="T_648c7_row2_col9" class="data row2 col9" >0.757015</td>
+      <td id="T_648c7_row2_col10" class="data row2 col10" >0.381323</td>
+      <td id="T_648c7_row2_col11" class="data row2 col11" >1.444518</td>
+    </tr>
+    <tr>
+      <th id="T_648c7_level0_row3" class="row_heading level0 row3" >3</th>
+      <td id="T_648c7_row3_col0" class="data row3 col0" >RootPCTokenizer</td>
+      <td id="T_648c7_row3_col1" class="data row3 col1" >1.258381</td>
+      <td id="T_648c7_row3_col2" class="data row3 col2" >4.238757</td>
+      <td id="T_648c7_row3_col3" class="data row3 col3" >0.932952</td>
+      <td id="T_648c7_row3_col4" class="data row3 col4" >0.385159</td>
+      <td id="T_648c7_row3_col5" class="data row3 col5" >1.872354</td>
+      <td id="T_648c7_row3_col6" class="data row3 col6" >0.573018</td>
+      <td id="T_648c7_row3_col7" class="data row3 col7" >2.290344</td>
+      <td id="T_648c7_row3_col8" class="data row3 col8" >0.383007</td>
+      <td id="T_648c7_row3_col9" class="data row3 col9" >0.770664</td>
+      <td id="T_648c7_row3_col10" class="data row3 col10" >0.385811</td>
+      <td id="T_648c7_row3_col11" class="data row3 col11" >1.435104</td>
+    </tr>
+    <tr>
+      <th id="T_648c7_level0_row4" class="row_heading level0 row4" >4</th>
+      <td id="T_648c7_row4_col0" class="data row4 col0" >RootTypeTokenizer</td>
+      <td id="T_648c7_row4_col1" class="data row4 col1" >1.253490</td>
+      <td id="T_648c7_row4_col2" class="data row4 col2" >4.224719</td>
+      <td id="T_648c7_row4_col3" class="data row4 col3" >0.921590</td>
+      <td id="T_648c7_row4_col4" class="data row4 col4" >0.415413</td>
+      <td id="T_648c7_row4_col5" class="data row4 col5" >1.947786</td>
+      <td id="T_648c7_row4_col6" class="data row4 col6" >0.570021</td>
+      <td id="T_648c7_row4_col7" class="data row4 col7" >2.322538</td>
+      <td id="T_648c7_row4_col8" class="data row4 col8" >0.355334</td>
+      <td id="T_648c7_row4_col9" class="data row4 col9" >0.773939</td>
+      <td id="T_648c7_row4_col10" class="data row4 col10" >0.399697</td>
+      <td id="T_648c7_row4_col11" class="data row4 col11" >1.427853</td>
+    </tr>
+  </tbody>
+</table>
+<style type="text/css">
+#T_e7bbe_row1_col1, #T_e7bbe_row1_col2, #T_e7bbe_row1_col4, #T_e7bbe_row1_col5, #T_e7bbe_row1_col6, #T_e7bbe_row1_col7, #T_e7bbe_row1_col9, #T_e7bbe_row1_col10, #T_e7bbe_row1_col11, #T_e7bbe_row2_col8, #T_e7bbe_row4_col3 {
+  background-color: lightgreen;
+}
+</style>
+<table id="T_e7bbe">
+  <caption><h2>Model: bart_1.0</h2></caption>
+  <thead>
+    <tr>
+      <th class="blank level0" >&nbsp;</th>
+      <th id="T_e7bbe_level0_col0" class="col_heading level0 col0" >Representation</th>
+      <th id="T_e7bbe_level0_col1" class="col_heading level0 col1" >CHE</th>
+      <th id="T_e7bbe_level0_col2" class="col_heading level0 col2" >CC</th>
+      <th id="T_e7bbe_level0_col3" class="col_heading level0 col3" >CTD</th>
+      <th id="T_e7bbe_level0_col4" class="col_heading level0 col4" >HRHE_i</th>
+      <th id="T_e7bbe_level0_col5" class="col_heading level0 col5" >HRC_i</th>
+      <th id="T_e7bbe_level0_col6" class="col_heading level0 col6" >HRHE_o</th>
+      <th id="T_e7bbe_level0_col7" class="col_heading level0 col7" >HRC_o</th>
+      <th id="T_e7bbe_level0_col8" class="col_heading level0 col8" >CBS</th>
+      <th id="T_e7bbe_level0_col9" class="col_heading level0 col9" >CTnCTR</th>
+      <th id="T_e7bbe_level0_col10" class="col_heading level0 col10" >PCS</th>
+      <th id="T_e7bbe_level0_col11" class="col_heading level0 col11" >MCTD</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th id="T_e7bbe_level0_row0" class="row_heading level0 row0" >0</th>
+      <td id="T_e7bbe_row0_col0" class="data row0 col0" >Ground Truth</td>
+      <td id="T_e7bbe_row0_col1" class="data row0 col1" >1.360429</td>
+      <td id="T_e7bbe_row0_col2" class="data row0 col2" >4.665784</td>
+      <td id="T_e7bbe_row0_col3" class="data row0 col3" >0.897650</td>
+      <td id="T_e7bbe_row0_col4" class="data row0 col4" >0.566119</td>
+      <td id="T_e7bbe_row0_col5" class="data row0 col5" >2.344805</td>
+      <td id="T_e7bbe_row0_col6" class="data row0 col6" >0.685906</td>
+      <td id="T_e7bbe_row0_col7" class="data row0 col7" >2.790867</td>
+      <td id="T_e7bbe_row0_col8" class="data row0 col8" >0.442294</td>
+      <td id="T_e7bbe_row0_col9" class="data row0 col9" >0.836940</td>
+      <td id="T_e7bbe_row0_col10" class="data row0 col10" >0.480571</td>
+      <td id="T_e7bbe_row0_col11" class="data row0 col11" >1.344676</td>
+    </tr>
+    <tr>
+      <th id="T_e7bbe_level0_row1" class="row_heading level0 row1" >1</th>
+      <td id="T_e7bbe_row1_col0" class="data row1 col0" >ChordSymbolTokenizer</td>
+      <td id="T_e7bbe_row1_col1" class="data row1 col1" >1.362881</td>
+      <td id="T_e7bbe_row1_col2" class="data row1 col2" >4.834547</td>
+      <td id="T_e7bbe_row1_col3" class="data row1 col3" >0.941898</td>
+      <td id="T_e7bbe_row1_col4" class="data row1 col4" >0.578578</td>
+      <td id="T_e7bbe_row1_col5" class="data row1 col5" >2.442753</td>
+      <td id="T_e7bbe_row1_col6" class="data row1 col6" >0.696974</td>
+      <td id="T_e7bbe_row1_col7" class="data row1 col7" >2.876241</td>
+      <td id="T_e7bbe_row1_col8" class="data row1 col8" >0.431351</td>
+      <td id="T_e7bbe_row1_col9" class="data row1 col9" >0.771896</td>
+      <td id="T_e7bbe_row1_col10" class="data row1 col10" >0.390377</td>
+      <td id="T_e7bbe_row1_col11" class="data row1 col11" >1.431667</td>
+    </tr>
+    <tr>
+      <th id="T_e7bbe_level0_row2" class="row_heading level0 row2" >2</th>
+      <td id="T_e7bbe_row2_col0" class="data row2 col0" >PitchClassTokenizer</td>
+      <td id="T_e7bbe_row2_col1" class="data row2 col1" >1.414593</td>
+      <td id="T_e7bbe_row2_col2" class="data row2 col2" >5.152778</td>
+      <td id="T_e7bbe_row2_col3" class="data row2 col3" >0.924405</td>
+      <td id="T_e7bbe_row2_col4" class="data row2 col4" >0.697388</td>
+      <td id="T_e7bbe_row2_col5" class="data row2 col5" >2.860450</td>
+      <td id="T_e7bbe_row2_col6" class="data row2 col6" >0.740509</td>
+      <td id="T_e7bbe_row2_col7" class="data row2 col7" >3.130291</td>
+      <td id="T_e7bbe_row2_col8" class="data row2 col8" >0.452382</td>
+      <td id="T_e7bbe_row2_col9" class="data row2 col9" >0.743739</td>
+      <td id="T_e7bbe_row2_col10" class="data row2 col10" >0.361177</td>
+      <td id="T_e7bbe_row2_col11" class="data row2 col11" >1.459737</td>
+    </tr>
+    <tr>
+      <th id="T_e7bbe_level0_row3" class="row_heading level0 row3" >3</th>
+      <td id="T_e7bbe_row3_col0" class="data row3 col0" >RootPCTokenizer</td>
+      <td id="T_e7bbe_row3_col1" class="data row3 col1" >1.395696</td>
+      <td id="T_e7bbe_row3_col2" class="data row3 col2" >4.975513</td>
+      <td id="T_e7bbe_row3_col3" class="data row3 col3" >0.940691</td>
+      <td id="T_e7bbe_row3_col4" class="data row3 col4" >0.643753</td>
+      <td id="T_e7bbe_row3_col5" class="data row3 col5" >2.616810</td>
+      <td id="T_e7bbe_row3_col6" class="data row3 col6" >0.759406</td>
+      <td id="T_e7bbe_row3_col7" class="data row3 col7" >2.908008</td>
+      <td id="T_e7bbe_row3_col8" class="data row3 col8" >0.498687</td>
+      <td id="T_e7bbe_row3_col9" class="data row3 col9" >0.759252</td>
+      <td id="T_e7bbe_row3_col10" class="data row3 col10" >0.368956</td>
+      <td id="T_e7bbe_row3_col11" class="data row3 col11" >1.447938</td>
+    </tr>
+    <tr>
+      <th id="T_e7bbe_level0_row4" class="row_heading level0 row4" >4</th>
+      <td id="T_e7bbe_row4_col0" class="data row4 col0" >RootTypeTokenizer</td>
+      <td id="T_e7bbe_row4_col1" class="data row4 col1" >1.396160</td>
+      <td id="T_e7bbe_row4_col2" class="data row4 col2" >4.976852</td>
+      <td id="T_e7bbe_row4_col3" class="data row4 col3" >0.909715</td>
+      <td id="T_e7bbe_row4_col4" class="data row4 col4" >0.673041</td>
+      <td id="T_e7bbe_row4_col5" class="data row4 col5" >2.767196</td>
+      <td id="T_e7bbe_row4_col6" class="data row4 col6" >0.762959</td>
+      <td id="T_e7bbe_row4_col7" class="data row4 col7" >3.043651</td>
+      <td id="T_e7bbe_row4_col8" class="data row4 col8" >0.485990</td>
+      <td id="T_e7bbe_row4_col9" class="data row4 col9" >0.770772</td>
+      <td id="T_e7bbe_row4_col10" class="data row4 col10" >0.384175</td>
+      <td id="T_e7bbe_row4_col11" class="data row4 col11" >1.435098</td>
+    </tr>
+  </tbody>
+</table>
+<style type="text/css">
+#T_6db14_row1_col1, #T_6db14_row1_col2, #T_6db14_row1_col4, #T_6db14_row1_col5, #T_6db14_row1_col6, #T_6db14_row1_col8, #T_6db14_row3_col7, #T_6db14_row4_col3, #T_6db14_row4_col9, #T_6db14_row4_col10, #T_6db14_row4_col11 {
+  background-color: lightgreen;
+}
+</style>
+<table id="T_6db14">
+  <caption><h2>Model: bart_1.2</h2></caption>
+  <thead>
+    <tr>
+      <th class="blank level0" >&nbsp;</th>
+      <th id="T_6db14_level0_col0" class="col_heading level0 col0" >Representation</th>
+      <th id="T_6db14_level0_col1" class="col_heading level0 col1" >CHE</th>
+      <th id="T_6db14_level0_col2" class="col_heading level0 col2" >CC</th>
+      <th id="T_6db14_level0_col3" class="col_heading level0 col3" >CTD</th>
+      <th id="T_6db14_level0_col4" class="col_heading level0 col4" >HRHE_i</th>
+      <th id="T_6db14_level0_col5" class="col_heading level0 col5" >HRC_i</th>
+      <th id="T_6db14_level0_col6" class="col_heading level0 col6" >HRHE_o</th>
+      <th id="T_6db14_level0_col7" class="col_heading level0 col7" >HRC_o</th>
+      <th id="T_6db14_level0_col8" class="col_heading level0 col8" >CBS</th>
+      <th id="T_6db14_level0_col9" class="col_heading level0 col9" >CTnCTR</th>
+      <th id="T_6db14_level0_col10" class="col_heading level0 col10" >PCS</th>
+      <th id="T_6db14_level0_col11" class="col_heading level0 col11" >MCTD</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th id="T_6db14_level0_row0" class="row_heading level0 row0" >0</th>
+      <td id="T_6db14_row0_col0" class="data row0 col0" >Ground Truth</td>
+      <td id="T_6db14_row0_col1" class="data row0 col1" >1.360427</td>
+      <td id="T_6db14_row0_col2" class="data row0 col2" >4.665344</td>
+      <td id="T_6db14_row0_col3" class="data row0 col3" >0.897689</td>
+      <td id="T_6db14_row0_col4" class="data row0 col4" >0.566200</td>
+      <td id="T_6db14_row0_col5" class="data row0 col5" >2.344577</td>
+      <td id="T_6db14_row0_col6" class="data row0 col6" >0.685824</td>
+      <td id="T_6db14_row0_col7" class="data row0 col7" >2.790344</td>
+      <td id="T_6db14_row0_col8" class="data row0 col8" >0.442166</td>
+      <td id="T_6db14_row0_col9" class="data row0 col9" >0.837016</td>
+      <td id="T_6db14_row0_col10" class="data row0 col10" >0.480748</td>
+      <td id="T_6db14_row0_col11" class="data row0 col11" >1.344563</td>
+    </tr>
+    <tr>
+      <th id="T_6db14_level0_row1" class="row_heading level0 row1" >1</th>
+      <td id="T_6db14_row1_col0" class="data row1 col0" >ChordSymbolTokenizer</td>
+      <td id="T_6db14_row1_col1" class="data row1 col1" >1.561909</td>
+      <td id="T_6db14_row1_col2" class="data row1 col2" >6.079365</td>
+      <td id="T_6db14_row1_col3" class="data row1 col3" >0.948259</td>
+      <td id="T_6db14_row1_col4" class="data row1 col4" >0.859612</td>
+      <td id="T_6db14_row1_col5" class="data row1 col5" >3.376984</td>
+      <td id="T_6db14_row1_col6" class="data row1 col6" >0.910861</td>
+      <td id="T_6db14_row1_col7" class="data row1 col7" >3.691799</td>
+      <td id="T_6db14_row1_col8" class="data row1 col8" >0.556688</td>
+      <td id="T_6db14_row1_col9" class="data row1 col9" >0.758033</td>
+      <td id="T_6db14_row1_col10" class="data row1 col10" >0.362122</td>
+      <td id="T_6db14_row1_col11" class="data row1 col11" >1.449792</td>
+    </tr>
+    <tr>
+      <th id="T_6db14_level0_row2" class="row_heading level0 row2" >2</th>
+      <td id="T_6db14_row2_col0" class="data row2 col0" >PitchClassTokenizer</td>
+      <td id="T_6db14_row2_col1" class="data row2 col1" >1.626760</td>
+      <td id="T_6db14_row2_col2" class="data row2 col2" >6.512566</td>
+      <td id="T_6db14_row2_col3" class="data row2 col3" >0.935628</td>
+      <td id="T_6db14_row2_col4" class="data row2 col4" >1.033516</td>
+      <td id="T_6db14_row2_col5" class="data row2 col5" >4.029101</td>
+      <td id="T_6db14_row2_col6" class="data row2 col6" >1.017569</td>
+      <td id="T_6db14_row2_col7" class="data row2 col7" >4.251323</td>
+      <td id="T_6db14_row2_col8" class="data row2 col8" >0.624039</td>
+      <td id="T_6db14_row2_col9" class="data row2 col9" >0.735452</td>
+      <td id="T_6db14_row2_col10" class="data row2 col10" >0.341260</td>
+      <td id="T_6db14_row2_col11" class="data row2 col11" >1.467697</td>
+    </tr>
+    <tr>
+      <th id="T_6db14_level0_row3" class="row_heading level0 row3" >3</th>
+      <td id="T_6db14_row3_col0" class="data row3 col0" >RootPCTokenizer</td>
+      <td id="T_6db14_row3_col1" class="data row3 col1" >1.585305</td>
+      <td id="T_6db14_row3_col2" class="data row3 col2" >6.118308</td>
+      <td id="T_6db14_row3_col3" class="data row3 col3" >0.954584</td>
+      <td id="T_6db14_row3_col4" class="data row3 col4" >0.904503</td>
+      <td id="T_6db14_row3_col5" class="data row3 col5" >3.523463</td>
+      <td id="T_6db14_row3_col6" class="data row3 col6" >0.935848</td>
+      <td id="T_6db14_row3_col7" class="data row3 col7" >3.608724</td>
+      <td id="T_6db14_row3_col8" class="data row3 col8" >0.602683</td>
+      <td id="T_6db14_row3_col9" class="data row3 col9" >0.741994</td>
+      <td id="T_6db14_row3_col10" class="data row3 col10" >0.346437</td>
+      <td id="T_6db14_row3_col11" class="data row3 col11" >1.459325</td>
+    </tr>
+    <tr>
+      <th id="T_6db14_level0_row4" class="row_heading level0 row4" >4</th>
+      <td id="T_6db14_row4_col0" class="data row4 col0" >RootTypeTokenizer</td>
+      <td id="T_6db14_row4_col1" class="data row4 col1" >1.572381</td>
+      <td id="T_6db14_row4_col2" class="data row4 col2" >6.082672</td>
+      <td id="T_6db14_row4_col3" class="data row4 col3" >0.921712</td>
+      <td id="T_6db14_row4_col4" class="data row4 col4" >0.962029</td>
+      <td id="T_6db14_row4_col5" class="data row4 col5" >3.730159</td>
+      <td id="T_6db14_row4_col6" class="data row4 col6" >0.976710</td>
+      <td id="T_6db14_row4_col7" class="data row4 col7" >3.887566</td>
+      <td id="T_6db14_row4_col8" class="data row4 col8" >0.630876</td>
+      <td id="T_6db14_row4_col9" class="data row4 col9" >0.758313</td>
+      <td id="T_6db14_row4_col10" class="data row4 col10" >0.363577</td>
+      <td id="T_6db14_row4_col11" class="data row4 col11" >1.446966</td>
+    </tr>
+  </tbody>
+</table>
+<style type="text/css">
+#T_8eeff_row1_col4, #T_8eeff_row1_col5, #T_8eeff_row1_col6, #T_8eeff_row1_col7, #T_8eeff_row1_col8, #T_8eeff_row1_col9, #T_8eeff_row1_col10, #T_8eeff_row1_col11, #T_8eeff_row2_col1, #T_8eeff_row2_col2, #T_8eeff_row4_col3 {
+  background-color: lightgreen;
+}
+</style>
+<table id="T_8eeff">
+  <caption><h2>Model: gpt_0.8</h2></caption>
+  <thead>
+    <tr>
+      <th class="blank level0" >&nbsp;</th>
+      <th id="T_8eeff_level0_col0" class="col_heading level0 col0" >Representation</th>
+      <th id="T_8eeff_level0_col1" class="col_heading level0 col1" >CHE</th>
+      <th id="T_8eeff_level0_col2" class="col_heading level0 col2" >CC</th>
+      <th id="T_8eeff_level0_col3" class="col_heading level0 col3" >CTD</th>
+      <th id="T_8eeff_level0_col4" class="col_heading level0 col4" >HRHE_i</th>
+      <th id="T_8eeff_level0_col5" class="col_heading level0 col5" >HRC_i</th>
+      <th id="T_8eeff_level0_col6" class="col_heading level0 col6" >HRHE_o</th>
+      <th id="T_8eeff_level0_col7" class="col_heading level0 col7" >HRC_o</th>
+      <th id="T_8eeff_level0_col8" class="col_heading level0 col8" >CBS</th>
+      <th id="T_8eeff_level0_col9" class="col_heading level0 col9" >CTnCTR</th>
+      <th id="T_8eeff_level0_col10" class="col_heading level0 col10" >PCS</th>
+      <th id="T_8eeff_level0_col11" class="col_heading level0 col11" >MCTD</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th id="T_8eeff_level0_row0" class="row_heading level0 row0" >0</th>
+      <td id="T_8eeff_row0_col0" class="data row0 col0" >Ground Truth</td>
+      <td id="T_8eeff_row0_col1" class="data row0 col1" >1.359528</td>
+      <td id="T_8eeff_row0_col2" class="data row0 col2" >4.662921</td>
+      <td id="T_8eeff_row0_col3" class="data row0 col3" >0.897096</td>
+      <td id="T_8eeff_row0_col4" class="data row0 col4" >0.565826</td>
+      <td id="T_8eeff_row0_col5" class="data row0 col5" >2.343027</td>
+      <td id="T_8eeff_row0_col6" class="data row0 col6" >0.685371</td>
+      <td id="T_8eeff_row0_col7" class="data row0 col7" >2.789161</td>
+      <td id="T_8eeff_row0_col8" class="data row0 col8" >0.441874</td>
+      <td id="T_8eeff_row0_col9" class="data row0 col9" >0.836903</td>
+      <td id="T_8eeff_row0_col10" class="data row0 col10" >0.480430</td>
+      <td id="T_8eeff_row0_col11" class="data row0 col11" >1.344948</td>
+    </tr>
+    <tr>
+      <th id="T_8eeff_level0_row1" class="row_heading level0 row1" >1</th>
+      <td id="T_8eeff_row1_col0" class="data row1 col0" >ChordSymbolTokenizer</td>
+      <td id="T_8eeff_row1_col1" class="data row1 col1" >1.008721</td>
+      <td id="T_8eeff_row1_col2" class="data row1 col2" >3.268341</td>
+      <td id="T_8eeff_row1_col3" class="data row1 col3" >0.856608</td>
+      <td id="T_8eeff_row1_col4" class="data row1 col4" >0.224814</td>
+      <td id="T_8eeff_row1_col5" class="data row1 col5" >1.465301</td>
+      <td id="T_8eeff_row1_col6" class="data row1 col6" >0.407719</td>
+      <td id="T_8eeff_row1_col7" class="data row1 col7" >1.877726</td>
+      <td id="T_8eeff_row1_col8" class="data row1 col8" >0.268469</td>
+      <td id="T_8eeff_row1_col9" class="data row1 col9" >0.754241</td>
+      <td id="T_8eeff_row1_col10" class="data row1 col10" >0.376781</td>
+      <td id="T_8eeff_row1_col11" class="data row1 col11" >1.448683</td>
+    </tr>
+    <tr>
+      <th id="T_8eeff_level0_row2" class="row_heading level0 row2" >2</th>
+      <td id="T_8eeff_row2_col0" class="data row2 col0" >PitchClassTokenizer</td>
+      <td id="T_8eeff_row2_col1" class="data row2 col1" >1.095634</td>
+      <td id="T_8eeff_row2_col2" class="data row2 col2" >3.440846</td>
+      <td id="T_8eeff_row2_col3" class="data row2 col3" >0.887093</td>
+      <td id="T_8eeff_row2_col4" class="data row2 col4" >0.188531</td>
+      <td id="T_8eeff_row2_col5" class="data row2 col5" >1.372108</td>
+      <td id="T_8eeff_row2_col6" class="data row2 col6" >0.313713</td>
+      <td id="T_8eeff_row2_col7" class="data row2 col7" >1.631196</td>
+      <td id="T_8eeff_row2_col8" class="data row2 col8" >0.193790</td>
+      <td id="T_8eeff_row2_col9" class="data row2 col9" >0.739508</td>
+      <td id="T_8eeff_row2_col10" class="data row2 col10" >0.351195</td>
+      <td id="T_8eeff_row2_col11" class="data row2 col11" >1.470877</td>
+    </tr>
+    <tr>
+      <th id="T_8eeff_level0_row3" class="row_heading level0 row3" >3</th>
+      <td id="T_8eeff_row3_col0" class="data row3 col0" >RootPCTokenizer</td>
+      <td id="T_8eeff_row3_col1" class="data row3 col1" >1.036417</td>
+      <td id="T_8eeff_row3_col2" class="data row3 col2" >3.292053</td>
+      <td id="T_8eeff_row3_col3" class="data row3 col3" >0.875998</td>
+      <td id="T_8eeff_row3_col4" class="data row3 col4" >0.191986</td>
+      <td id="T_8eeff_row3_col5" class="data row3 col5" >1.401987</td>
+      <td id="T_8eeff_row3_col6" class="data row3 col6" >0.324236</td>
+      <td id="T_8eeff_row3_col7" class="data row3 col7" >1.722517</td>
+      <td id="T_8eeff_row3_col8" class="data row3 col8" >0.220966</td>
+      <td id="T_8eeff_row3_col9" class="data row3 col9" >0.740316</td>
+      <td id="T_8eeff_row3_col10" class="data row3 col10" >0.352955</td>
+      <td id="T_8eeff_row3_col11" class="data row3 col11" >1.470312</td>
+    </tr>
+    <tr>
+      <th id="T_8eeff_level0_row4" class="row_heading level0 row4" >4</th>
+      <td id="T_8eeff_row4_col0" class="data row4 col0" >RootTypeTokenizer</td>
+      <td id="T_8eeff_row4_col1" class="data row4 col1" >1.060555</td>
+      <td id="T_8eeff_row4_col2" class="data row4 col2" >3.362434</td>
+      <td id="T_8eeff_row4_col3" class="data row4 col3" >0.906440</td>
+      <td id="T_8eeff_row4_col4" class="data row4 col4" >0.200320</td>
+      <td id="T_8eeff_row4_col5" class="data row4 col5" >1.402778</td>
+      <td id="T_8eeff_row4_col6" class="data row4 col6" >0.354381</td>
+      <td id="T_8eeff_row4_col7" class="data row4 col7" >1.730820</td>
+      <td id="T_8eeff_row4_col8" class="data row4 col8" >0.230367</td>
+      <td id="T_8eeff_row4_col9" class="data row4 col9" >0.750017</td>
+      <td id="T_8eeff_row4_col10" class="data row4 col10" >0.370113</td>
+      <td id="T_8eeff_row4_col11" class="data row4 col11" >1.459244</td>
+    </tr>
+  </tbody>
+</table>
+<style type="text/css">
+#T_b17c8_row1_col3, #T_b17c8_row1_col4, #T_b17c8_row1_col5, #T_b17c8_row1_col6, #T_b17c8_row1_col7, #T_b17c8_row1_col8, #T_b17c8_row1_col9, #T_b17c8_row2_col1, #T_b17c8_row2_col2, #T_b17c8_row4_col10, #T_b17c8_row4_col11 {
+  background-color: lightgreen;
+}
+</style>
+<table id="T_b17c8">
+  <caption><h2>Model: gpt_1.0</h2></caption>
+  <thead>
+    <tr>
+      <th class="blank level0" >&nbsp;</th>
+      <th id="T_b17c8_level0_col0" class="col_heading level0 col0" >Representation</th>
+      <th id="T_b17c8_level0_col1" class="col_heading level0 col1" >CHE</th>
+      <th id="T_b17c8_level0_col2" class="col_heading level0 col2" >CC</th>
+      <th id="T_b17c8_level0_col3" class="col_heading level0 col3" >CTD</th>
+      <th id="T_b17c8_level0_col4" class="col_heading level0 col4" >HRHE_i</th>
+      <th id="T_b17c8_level0_col5" class="col_heading level0 col5" >HRC_i</th>
+      <th id="T_b17c8_level0_col6" class="col_heading level0 col6" >HRHE_o</th>
+      <th id="T_b17c8_level0_col7" class="col_heading level0 col7" >HRC_o</th>
+      <th id="T_b17c8_level0_col8" class="col_heading level0 col8" >CBS</th>
+      <th id="T_b17c8_level0_col9" class="col_heading level0 col9" >CTnCTR</th>
+      <th id="T_b17c8_level0_col10" class="col_heading level0 col10" >PCS</th>
+      <th id="T_b17c8_level0_col11" class="col_heading level0 col11" >MCTD</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th id="T_b17c8_level0_row0" class="row_heading level0 row0" >0</th>
+      <td id="T_b17c8_row0_col0" class="data row0 col0" >Ground Truth</td>
+      <td id="T_b17c8_row0_col1" class="data row0 col1" >1.359418</td>
+      <td id="T_b17c8_row0_col2" class="data row0 col2" >4.663137</td>
+      <td id="T_b17c8_row0_col3" class="data row0 col3" >0.896734</td>
+      <td id="T_b17c8_row0_col4" class="data row0 col4" >0.565946</td>
+      <td id="T_b17c8_row0_col5" class="data row0 col5" >2.343481</td>
+      <td id="T_b17c8_row0_col6" class="data row0 col6" >0.685964</td>
+      <td id="T_b17c8_row0_col7" class="data row0 col7" >2.790867</td>
+      <td id="T_b17c8_row0_col8" class="data row0 col8" >0.442098</td>
+      <td id="T_b17c8_row0_col9" class="data row0 col9" >0.836761</td>
+      <td id="T_b17c8_row0_col10" class="data row0 col10" >0.480192</td>
+      <td id="T_b17c8_row0_col11" class="data row0 col11" >1.345157</td>
+    </tr>
+    <tr>
+      <th id="T_b17c8_level0_row1" class="row_heading level0 row1" >1</th>
+      <td id="T_b17c8_row1_col0" class="data row1 col0" >ChordSymbolTokenizer</td>
+      <td id="T_b17c8_row1_col1" class="data row1 col1" >1.188950</td>
+      <td id="T_b17c8_row1_col2" class="data row1 col2" >4.061549</td>
+      <td id="T_b17c8_row1_col3" class="data row1 col3" >0.899009</td>
+      <td id="T_b17c8_row1_col4" class="data row1 col4" >0.431468</td>
+      <td id="T_b17c8_row1_col5" class="data row1 col5" >2.004633</td>
+      <td id="T_b17c8_row1_col6" class="data row1 col6" >0.586915</td>
+      <td id="T_b17c8_row1_col7" class="data row1 col7" >2.400397</td>
+      <td id="T_b17c8_row1_col8" class="data row1 col8" >0.390346</td>
+      <td id="T_b17c8_row1_col9" class="data row1 col9" >0.736796</td>
+      <td id="T_b17c8_row1_col10" class="data row1 col10" >0.352822</td>
+      <td id="T_b17c8_row1_col11" class="data row1 col11" >1.469333</td>
+    </tr>
+    <tr>
+      <th id="T_b17c8_level0_row2" class="row_heading level0 row2" >2</th>
+      <td id="T_b17c8_row2_col0" class="data row2 col0" >PitchClassTokenizer</td>
+      <td id="T_b17c8_row2_col1" class="data row2 col1" >1.272480</td>
+      <td id="T_b17c8_row2_col2" class="data row2 col2" >4.214947</td>
+      <td id="T_b17c8_row2_col3" class="data row2 col3" >0.939815</td>
+      <td id="T_b17c8_row2_col4" class="data row2 col4" >0.411009</td>
+      <td id="T_b17c8_row2_col5" class="data row2 col5" >1.923280</td>
+      <td id="T_b17c8_row2_col6" class="data row2 col6" >0.490515</td>
+      <td id="T_b17c8_row2_col7" class="data row2 col7" >2.157407</td>
+      <td id="T_b17c8_row2_col8" class="data row2 col8" >0.314470</td>
+      <td id="T_b17c8_row2_col9" class="data row2 col9" >0.724857</td>
+      <td id="T_b17c8_row2_col10" class="data row2 col10" >0.331676</td>
+      <td id="T_b17c8_row2_col11" class="data row2 col11" >1.479526</td>
+    </tr>
+    <tr>
+      <th id="T_b17c8_level0_row3" class="row_heading level0 row3" >3</th>
+      <td id="T_b17c8_row3_col0" class="data row3 col0" >RootPCTokenizer</td>
+      <td id="T_b17c8_row3_col1" class="data row3 col1" >1.201809</td>
+      <td id="T_b17c8_row3_col2" class="data row3 col2" >3.974884</td>
+      <td id="T_b17c8_row3_col3" class="data row3 col3" >0.913654</td>
+      <td id="T_b17c8_row3_col4" class="data row3 col4" >0.373240</td>
+      <td id="T_b17c8_row3_col5" class="data row3 col5" >1.865169</td>
+      <td id="T_b17c8_row3_col6" class="data row3 col6" >0.487552</td>
+      <td id="T_b17c8_row3_col7" class="data row3 col7" >2.189028</td>
+      <td id="T_b17c8_row3_col8" class="data row3 col8" >0.331905</td>
+      <td id="T_b17c8_row3_col9" class="data row3 col9" >0.726402</td>
+      <td id="T_b17c8_row3_col10" class="data row3 col10" >0.333152</td>
+      <td id="T_b17c8_row3_col11" class="data row3 col11" >1.482090</td>
+    </tr>
+    <tr>
+      <th id="T_b17c8_level0_row4" class="row_heading level0 row4" >4</th>
+      <td id="T_b17c8_row4_col0" class="data row4 col0" >RootTypeTokenizer</td>
+      <td id="T_b17c8_row4_col1" class="data row4 col1" >1.212920</td>
+      <td id="T_b17c8_row4_col2" class="data row4 col2" >3.985450</td>
+      <td id="T_b17c8_row4_col3" class="data row4 col3" >0.956314</td>
+      <td id="T_b17c8_row4_col4" class="data row4 col4" >0.366800</td>
+      <td id="T_b17c8_row4_col5" class="data row4 col5" >1.787698</td>
+      <td id="T_b17c8_row4_col6" class="data row4 col6" >0.504817</td>
+      <td id="T_b17c8_row4_col7" class="data row4 col7" >2.145503</td>
+      <td id="T_b17c8_row4_col8" class="data row4 col8" >0.325165</td>
+      <td id="T_b17c8_row4_col9" class="data row4 col9" >0.736214</td>
+      <td id="T_b17c8_row4_col10" class="data row4 col10" >0.353715</td>
+      <td id="T_b17c8_row4_col11" class="data row4 col11" >1.469281</td>
+    </tr>
+  </tbody>
+</table>
+<style type="text/css">
+#T_a9429_row1_col3, #T_a9429_row1_col9, #T_a9429_row1_col10, #T_a9429_row1_col11, #T_a9429_row2_col8, #T_a9429_row3_col1, #T_a9429_row3_col6, #T_a9429_row4_col2, #T_a9429_row4_col4, #T_a9429_row4_col5, #T_a9429_row4_col7 {
+  background-color: lightgreen;
+}
+</style>
+<table id="T_a9429">
+  <caption><h2>Model: gpt_1.2</h2></caption>
+  <thead>
+    <tr>
+      <th class="blank level0" >&nbsp;</th>
+      <th id="T_a9429_level0_col0" class="col_heading level0 col0" >Representation</th>
+      <th id="T_a9429_level0_col1" class="col_heading level0 col1" >CHE</th>
+      <th id="T_a9429_level0_col2" class="col_heading level0 col2" >CC</th>
+      <th id="T_a9429_level0_col3" class="col_heading level0 col3" >CTD</th>
+      <th id="T_a9429_level0_col4" class="col_heading level0 col4" >HRHE_i</th>
+      <th id="T_a9429_level0_col5" class="col_heading level0 col5" >HRC_i</th>
+      <th id="T_a9429_level0_col6" class="col_heading level0 col6" >HRHE_o</th>
+      <th id="T_a9429_level0_col7" class="col_heading level0 col7" >HRC_o</th>
+      <th id="T_a9429_level0_col8" class="col_heading level0 col8" >CBS</th>
+      <th id="T_a9429_level0_col9" class="col_heading level0 col9" >CTnCTR</th>
+      <th id="T_a9429_level0_col10" class="col_heading level0 col10" >PCS</th>
+      <th id="T_a9429_level0_col11" class="col_heading level0 col11" >MCTD</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th id="T_a9429_level0_row0" class="row_heading level0 row0" >0</th>
+      <td id="T_a9429_row0_col0" class="data row0 col0" >Ground Truth</td>
+      <td id="T_a9429_row0_col1" class="data row0 col1" >1.359528</td>
+      <td id="T_a9429_row0_col2" class="data row0 col2" >4.662921</td>
+      <td id="T_a9429_row0_col3" class="data row0 col3" >0.897096</td>
+      <td id="T_a9429_row0_col4" class="data row0 col4" >0.565826</td>
+      <td id="T_a9429_row0_col5" class="data row0 col5" >2.343027</td>
+      <td id="T_a9429_row0_col6" class="data row0 col6" >0.685371</td>
+      <td id="T_a9429_row0_col7" class="data row0 col7" >2.789161</td>
+      <td id="T_a9429_row0_col8" class="data row0 col8" >0.441874</td>
+      <td id="T_a9429_row0_col9" class="data row0 col9" >0.836903</td>
+      <td id="T_a9429_row0_col10" class="data row0 col10" >0.480430</td>
+      <td id="T_a9429_row0_col11" class="data row0 col11" >1.344948</td>
+    </tr>
+    <tr>
+      <th id="T_a9429_level0_row1" class="row_heading level0 row1" >1</th>
+      <td id="T_a9429_row1_col0" class="data row1 col0" >ChordSymbolTokenizer</td>
+      <td id="T_a9429_row1_col1" class="data row1 col1" >1.431769</td>
+      <td id="T_a9429_row1_col2" class="data row1 col2" >5.475876</td>
+      <td id="T_a9429_row1_col3" class="data row1 col3" >0.898526</td>
+      <td id="T_a9429_row1_col4" class="data row1 col4" >0.715297</td>
+      <td id="T_a9429_row1_col5" class="data row1 col5" >2.907469</td>
+      <td id="T_a9429_row1_col6" class="data row1 col6" >0.834025</td>
+      <td id="T_a9429_row1_col7" class="data row1 col7" >3.289491</td>
+      <td id="T_a9429_row1_col8" class="data row1 col8" >0.555781</td>
+      <td id="T_a9429_row1_col9" class="data row1 col9" >0.724409</td>
+      <td id="T_a9429_row1_col10" class="data row1 col10" >0.333122</td>
+      <td id="T_a9429_row1_col11" class="data row1 col11" >1.478055</td>
+    </tr>
+    <tr>
+      <th id="T_a9429_level0_row2" class="row_heading level0 row2" >2</th>
+      <td id="T_a9429_row2_col0" class="data row2 col0" >PitchClassTokenizer</td>
+      <td id="T_a9429_row2_col1" class="data row2 col1" >1.445765</td>
+      <td id="T_a9429_row2_col2" class="data row2 col2" >5.214286</td>
+      <td id="T_a9429_row2_col3" class="data row2 col3" >0.940158</td>
+      <td id="T_a9429_row2_col4" class="data row2 col4" >0.689882</td>
+      <td id="T_a9429_row2_col5" class="data row2 col5" >2.803571</td>
+      <td id="T_a9429_row2_col6" class="data row2 col6" >0.713117</td>
+      <td id="T_a9429_row2_col7" class="data row2 col7" >2.938492</td>
+      <td id="T_a9429_row2_col8" class="data row2 col8" >0.451326</td>
+      <td id="T_a9429_row2_col9" class="data row2 col9" >0.715282</td>
+      <td id="T_a9429_row2_col10" class="data row2 col10" >0.313848</td>
+      <td id="T_a9429_row2_col11" class="data row2 col11" >1.491149</td>
+    </tr>
+    <tr>
+      <th id="T_a9429_level0_row3" class="row_heading level0 row3" >3</th>
+      <td id="T_a9429_row3_col0" class="data row3 col0" >RootPCTokenizer</td>
+      <td id="T_a9429_row3_col1" class="data row3 col1" >1.372665</td>
+      <td id="T_a9429_row3_col2" class="data row3 col2" >4.963600</td>
+      <td id="T_a9429_row3_col3" class="data row3 col3" >0.911284</td>
+      <td id="T_a9429_row3_col4" class="data row3 col4" >0.654130</td>
+      <td id="T_a9429_row3_col5" class="data row3 col5" >2.733951</td>
+      <td id="T_a9429_row3_col6" class="data row3 col6" >0.706249</td>
+      <td id="T_a9429_row3_col7" class="data row3 col7" >3.001324</td>
+      <td id="T_a9429_row3_col8" class="data row3 col8" >0.477734</td>
+      <td id="T_a9429_row3_col9" class="data row3 col9" >0.711669</td>
+      <td id="T_a9429_row3_col10" class="data row3 col10" >0.310761</td>
+      <td id="T_a9429_row3_col11" class="data row3 col11" >1.497392</td>
+    </tr>
+    <tr>
+      <th id="T_a9429_level0_row4" class="row_heading level0 row4" >4</th>
+      <td id="T_a9429_row4_col0" class="data row4 col0" >RootTypeTokenizer</td>
+      <td id="T_a9429_row4_col1" class="data row4 col1" >1.381356</td>
+      <td id="T_a9429_row4_col2" class="data row4 col2" >4.926587</td>
+      <td id="T_a9429_row4_col3" class="data row4 col3" >0.944734</td>
+      <td id="T_a9429_row4_col4" class="data row4 col4" >0.615752</td>
+      <td id="T_a9429_row4_col5" class="data row4 col5" >2.548280</td>
+      <td id="T_a9429_row4_col6" class="data row4 col6" >0.713975</td>
+      <td id="T_a9429_row4_col7" class="data row4 col7" >2.839947</td>
+      <td id="T_a9429_row4_col8" class="data row4 col8" >0.468777</td>
+      <td id="T_a9429_row4_col9" class="data row4 col9" >0.722493</td>
+      <td id="T_a9429_row4_col10" class="data row4 col10" >0.322902</td>
+      <td id="T_a9429_row4_col11" class="data row4 col11" >1.484073</td>
+    </tr>
+  </tbody>
+</table>
+
+      </body>
+    </html>
+    
