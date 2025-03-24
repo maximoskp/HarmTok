@@ -61,20 +61,22 @@ def main():
     model_path = 'saved_models/gpt/' + tokenizer_name + '/' + tokenizer_name + '.pt'
 
     config = AutoConfig.from_pretrained(
-        "gpt2",
         vocab_size=len(tokenizer.vocab),
         n_positions=512,
         n_layer=8,
-        n_head=8,
+        n_head=16,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
+        resid_pdrop=0.1,
+        embd_pdrop=0.1,
+        attn_pdrop=0.1,
         n_embd=512
     )
 
     model = GPT2LMHeadModel(config)
     
-    checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
+    checkpoint = torch.load(model_path, map_location=device_name, weights_only=True)
     model.load_state_dict(checkpoint)
 
     model.eval()

@@ -7,8 +7,8 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     GCTSymbolTokenizer, GCTRootTypeTokenizer, MelodyPitchTokenizer, \
     MergedMelHarmTokenizer
 
-# root_dir = '/media/maindisk/maximos/data/hooktheory_xmls/'
-root_dir = '/media/datadisk/datasets/hooktheory_xmls/'
+root_dir = '/media/maindisk/maximos/data/hooktheory_xmls/'
+# root_dir = '/media/datadisk/datasets/hooktheory_xmls/'
 data_files = []
 
 # Walk through all subdirectories and files

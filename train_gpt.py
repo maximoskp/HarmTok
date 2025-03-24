@@ -6,7 +6,7 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     GCTSymbolTokenizer, GCTRootTypeTokenizer, MelodyPitchTokenizer, \
     MergedMelHarmTokenizer
 from torch.utils.data import DataLoader
-from transformers import AutoConfig, GPT2LMHeadModel
+from transformers import AutoConfig, GPT2LMHeadModel, get_cosine_schedule_with_warmup
 import torch
 from torch.optim import AdamW
 from torcheval.metrics.text import Perplexity
@@ -75,13 +75,13 @@ def main():
         vocab_size=len(tokenizer.vocab),
         n_positions=512,
         n_layer=8,
-        n_head=8,
+        n_head=16,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
-        resid_pdrop=0.3,
-        embd_pdrop=0.3,
-        attn_pdrop=0.3,
+        resid_pdrop=0.1,
+        embd_pdrop=0.1,
+        attn_pdrop=0.1,
         n_embd=512
     )
 
@@ -97,13 +97,19 @@ def main():
             print('Selected device not available: ' + device_name)
     model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
+    
+    # Compute total training steps
+    total_steps = len(trainloader) * epochs
+    # Define the scheduler
+    warmup_steps = int(0.02 * total_steps)  # 10% of total steps for warmup
+    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
 
     perplexity_metric = Perplexity(ignore_index=-100).to(device)
 
     # save results
     os.makedirs('results/gpt', exist_ok=True)
     results_path = 'results/gpt/' + tokenizer_name + '.csv'
-    result_fields = ['epoch', 'train_loss', 'train_acc', \
+    result_fields = ['epoch', 'step', 'train_loss', 'train_acc', \
                     'train_ppl', 'train_te', 'val_loss', \
                     'val_acc', 'val_ppl', 'val_te', 'sav_version']
     with open( results_path, 'w' ) as f:
@@ -117,50 +123,8 @@ def main():
     transformer_path = save_dir + tokenizer_name + '.pt'
     saving_version = 0
 
-    # Training loop
-    for epoch in range(epochs):  # Number of epochs
-        train_loss = 0
-        running_loss = 0
-        batch_num = 0
-        running_accuracy = 0
-        train_accuracy = 0
-        running_perplexity = 0
-        train_perplexity = 0
-        running_token_entropy = 0
-        train_token_entropy = 0
-        print('training')
-        with tqdm(trainloader, unit='batch') as tepoch:
-            tepoch.set_description(f'Epoch {epoch} | trn')
-            for batch in tepoch:
-                input_ids = batch['input_ids'].to(device)
-                attention_mask = batch['attention_mask'].to(device)
-                labels = batch['labels'].to(device)
-                
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs.loss
-                
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-                # update loss
-                batch_num += 1
-                running_loss += loss.item()
-                train_loss = running_loss/batch_num
-                # accuracy
-                predictions = outputs.logits.argmax(dim=-1).roll(0,1).roll(shifts=(0,1), dims=(0,1))
-                mask = labels != -100
-                running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
-                train_accuracy = running_accuracy/batch_num
-                # perplexity
-                running_perplexity += perplexity_metric.update(outputs.logits, labels.roll(shifts=(0,-1), dims=(0,1))).compute().item()
-                train_perplexity = running_perplexity/batch_num
-                # token entropy
-                _, entropy_per_batch = compute_normalized_token_entropy(outputs.logits, labels.roll(shifts=(0,-1), dims=(0,1)), pad_token_id=-100)
-                running_token_entropy += entropy_per_batch
-                train_token_entropy = running_token_entropy/batch_num
-                
-                tepoch.set_postfix(loss=train_loss, accuracy=train_accuracy)
+    def validation_loop(epoch, step, train_loss, train_accuracy, \
+                        train_perplexity, train_token_entropy, best_val_loss, saving_version):
         val_loss = 0
         running_loss = 0
         batch_num = 0
@@ -208,11 +172,71 @@ def main():
             print(f'validation: accuracy={val_accuracy}, loss={val_loss}')
         with open( results_path, 'a' ) as f:
             writer = csv.writer(f)
-            writer.writerow( [epoch, train_loss, train_accuracy, \
+            writer.writerow( [epoch, step, train_loss, train_accuracy, \
                             train_perplexity, train_token_entropy, \
                             val_loss, val_accuracy, \
                             val_perplexity, val_token_entropy, \
                             saving_version] )
+        return best_val_loss, saving_version
+    # end validation_loop
+    step = 0
+    # Training loop
+    for epoch in range(epochs):  # Number of epochs
+        train_loss = 0
+        running_loss = 0
+        batch_num = 0
+        running_accuracy = 0
+        train_accuracy = 0
+        running_perplexity = 0
+        train_perplexity = 0
+        running_token_entropy = 0
+        train_token_entropy = 0
+        print('training')
+        with tqdm(trainloader, unit='batch') as tepoch:
+            tepoch.set_description(f'Epoch {epoch} | trn')
+            for batch in tepoch:
+                input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                labels = batch['labels'].to(device)
+                
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                loss = outputs.loss
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
+
+                # update loss
+                batch_num += 1
+                running_loss += loss.item()
+                train_loss = running_loss/batch_num
+                # accuracy
+                predictions = outputs.logits.argmax(dim=-1).roll(0,1).roll(shifts=(0,1), dims=(0,1))
+                mask = labels != -100
+                running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
+                train_accuracy = running_accuracy/batch_num
+                # perplexity
+                running_perplexity += perplexity_metric.update(outputs.logits, labels.roll(shifts=(0,-1), dims=(0,1))).compute().item()
+                train_perplexity = running_perplexity/batch_num
+                # token entropy
+                _, entropy_per_batch = compute_normalized_token_entropy(outputs.logits, labels.roll(shifts=(0,-1), dims=(0,1)), pad_token_id=-100)
+                running_token_entropy += entropy_per_batch
+                train_token_entropy = running_token_entropy/batch_num
+                
+                tepoch.set_postfix(loss=train_loss, accuracy=train_accuracy)
+                step += 1
+                if step%(total_steps//100) == 0 or step == total_steps:
+                    best_val_loss, saving_version = validation_loop(
+                        epoch,
+                        step,
+                        train_loss,
+                        train_accuracy,
+                        train_perplexity,
+                        train_token_entropy,
+                        best_val_loss,
+                        saving_version
+                    )
 # end main
 
 if __name__ == '__main__':

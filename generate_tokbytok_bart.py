@@ -64,15 +64,15 @@ def main():
         forced_eos_token_id=tokenizer.eos_token_id,
         max_position_embeddings=512,
         encoder_layers=8,
-        encoder_attention_heads=8,
+        encoder_attention_heads=16,
         encoder_ffn_dim=512,
         decoder_layers=8,
-        decoder_attention_heads=8,
+        decoder_attention_heads=16,
         decoder_ffn_dim=512,
         d_model=512,
-        encoder_layerdrop=0.3,
-        decoder_layerdrop=0.3,
-        dropout=0.3
+        encoder_layerdrop=0.1,
+        decoder_layerdrop=0.1,
+        dropout=0.1
     )
 
     model = BartForConditionalGeneration(bart_config)
@@ -87,15 +87,13 @@ def main():
 
     if device_name == 'cpu':
         device = torch.device('cpu')
-        checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
     else:
         if torch.cuda.is_available():
             device = torch.device(device_name)
-            checkpoint = torch.load(model_path, weights_only=True)
         else:
             print('Selected device not available: ' + device_name)
-            checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
 
+    checkpoint = torch.load(model_path, map_location=device_name, weights_only=True)
     model.load_state_dict(checkpoint)
 
     model.eval()

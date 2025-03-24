@@ -673,7 +673,7 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
 
             for root in chromatic_roots:
                 for quality in qualities:
-                        chord_token = f'{root}:{quality}'
+                        chord_token = root + (len(quality) > 0)*':' + quality
                         #print(chord_token)
                         self.vocab[chord_token] = len(self.vocab)
             self.update_ids_to_tokens()
@@ -683,7 +683,7 @@ class ChordSymbolTokenizer(HarmonyTokenizerBase):
     def handle_chord_symbol(self, h, harmony_tokens, harmony_ids):
         # Normalize and add the chord symbol
         root_token, type_token = self.normalize_chord_symbol(h)
-        chord_token = root_token + ':' + type_token
+        chord_token = root_token + (len(type_token) > 0)*':' + type_token
         if chord_token in self.vocab:
             harmony_tokens.append(chord_token)
             harmony_ids.append(self.vocab[chord_token])
