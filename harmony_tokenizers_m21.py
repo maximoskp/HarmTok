@@ -808,6 +808,7 @@ class PitchClassTokenizer(HarmonyTokenizerBase):
         if type_token in EXT_MIR_QUALITIES:
             root_pc, bmap, _ = mir_eval.chord.encode( root_token + (len(type_token) > 0)*':' + type_token, reduce_extended_chords=True )
             pcs = (root_pc + np.where(bmap > 0)[0])%12
+            pcs.sort()
             for pc in pcs:
                 tmp_token = 'chord_pc_' + str(pc)
                 harmony_tokens.append( tmp_token )
@@ -863,6 +864,7 @@ class RootPCTokenizer(HarmonyTokenizerBase):
             tmp_token = 'chord_root_' + str(root_pc)
             harmony_tokens.append( tmp_token )
             harmony_ids.append(self.vocab[ tmp_token ])
+            pcs.sort()
             for pc in pcs:
                 if pc != root_pc:
                     tmp_token = 'chord_pc_' + str(pc)
