@@ -91,15 +91,13 @@ def main():
 
     if device_name == 'cpu':
         device = torch.device('cpu')
-        checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
     else:
         if torch.cuda.is_available():
             device = torch.device(device_name)
-            checkpoint = torch.load(model_path, weights_only=True)
         else:
             print('Selected device not available: ' + device_name)
-            checkpoint = torch.load(model_path, map_location="cpu", weights_only=True)
     
+    checkpoint = torch.load(model_path, map_location=device_name, weights_only=True)
     model.load_state_dict(checkpoint)
 
     model.eval()

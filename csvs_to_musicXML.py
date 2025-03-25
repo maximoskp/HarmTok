@@ -44,8 +44,10 @@ def process_folder(tok_folder, tokenizer_name):
         try:
             tokenizer.decode(x_real, output_format='file', output_path=f'{mxl_folder}mxl_{i:04}_real.mxl')
             tokenizer.decode(x_gen, output_format='file', output_path=f'{mxl_folder}mxl_{i:04}_gen.mxl')
-            os.system(f'mscore -o {midi_folder}mid_{i:04}_real.mid {mxl_folder}mxl_{i:04}_real.mxl')
-            os.system(f'mscore -o {midi_folder}mid_{i:04}_gen.mid {mxl_folder}mxl_{i:04}_gen.mxl')
+            # os.system(f'mscore -o {midi_folder}mid_{i:04}_real.mid {mxl_folder}mxl_{i:04}_real.mxl')
+            os.system(f'QT_QPA_PLATFORM=offscreen mscore -o {midi_folder}mid_{i:04}_real.mid {mxl_folder}mxl_{i:04}_real.mxl')
+            # os.system(f'mscore -o {midi_folder}mid_{i:04}_gen.mid {mxl_folder}mxl_{i:04}_gen.mxl')
+            os.system(f'QT_QPA_PLATFORM=offscreen mscore -o {midi_folder}mid_{i:04}_gen.mid {mxl_folder}mxl_{i:04}_gen.mxl')
         except Exception as e:
             print(f'skipping {tok_folder}/{tokenizer_name} at index {i} due to {e}')
 

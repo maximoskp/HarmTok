@@ -61,6 +61,7 @@ def main():
     model_path = 'saved_models/gpt/' + tokenizer_name + '/' + tokenizer_name + '.pt'
 
     config = AutoConfig.from_pretrained(
+        "gpt2",
         vocab_size=len(tokenizer.vocab),
         n_positions=512,
         n_layer=8,
