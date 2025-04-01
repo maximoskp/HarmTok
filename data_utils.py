@@ -67,6 +67,7 @@ class MergedMelHarmDataset(Dataset):
         self.num_bars = num_bars
         self.return_attention_mask = return_attention_mask
         self.return_harmonization_labels = return_harmonization_labels
+        self.randomization_rate = 0
     # end init
 
     def __len__(self):
@@ -81,7 +82,8 @@ class MergedMelHarmDataset(Dataset):
             curr_num_bars = self.num_bars
             while tmp_encoded_len > self.max_length:
                 encoded = self.merged_tokenizer.encode(data_file, max_length=self.max_length,\
-                                pad_to_max_length=self.pad_to_max_length, num_bars=curr_num_bars)
+                                pad_to_max_length=self.pad_to_max_length, num_bars=curr_num_bars,\
+                                randomization_rate = self.randomization_rate)
                 tmp_encoded_len = len(encoded['input_ids'])
                 curr_num_bars -= 1
         else:

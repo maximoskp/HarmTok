@@ -75,15 +75,15 @@ def main():
         forced_eos_token_id=tokenizer.eos_token_id,
         max_position_embeddings=512,
         encoder_layers=8,
-        encoder_attention_heads=16,
+        encoder_attention_heads=8, #16,
         encoder_ffn_dim=512,
         decoder_layers=8,
-        decoder_attention_heads=16,
+        decoder_attention_heads=8, #16,
         decoder_ffn_dim=512,
         d_model=512,
-        encoder_layerdrop=0.1,
-        decoder_layerdrop=0.1,
-        dropout=0.1
+        encoder_layerdrop=0.25, #0.1,
+        decoder_layerdrop=0.25, #0.1,
+        dropout=0.25 #0.1
     )
 
     model = BartForConditionalGeneration(bart_config)
@@ -205,7 +205,8 @@ def main():
         train_perplexity = 0
         running_token_entropy = 0
         train_token_entropy = 0
-        print('training')
+        train_dataset.randomization_rate = 0.2 * ( (epoch/epochs)**0.5 )
+        print(f'training with randomization_rate: {train_dataset.randomization_rate}')
         with tqdm(trainloader, unit='batch') as tepoch:
             tepoch.set_description(f'Epoch {epoch} | trn')
             for batch in tepoch:
@@ -245,7 +246,7 @@ def main():
                 
                 tepoch.set_postfix(loss=train_loss, accuracy=train_accuracy)
                 step += 1
-                if step%(total_steps//100) == 0 or step == total_steps:
+                if step%(total_steps//epochs) == 0 or step == total_steps:#step%(total_steps//100) == 0 or step == total_steps:
                     best_val_loss, saving_version = validation_loop(
                         epoch,
                         step,

@@ -10,6 +10,7 @@ import os
 import json
 import ast
 from copy import deepcopy
+import random
 
 INT_TO_ROOT_SHARP = {
     0: 'C',
@@ -227,9 +228,61 @@ class HarmonyTokenizerBase(PreTrainedTokenizer):
         return {'tokens': tokens, 'ids': ids}
     # end transform
 
+    def randomize_score(self, score, note_remove_pct=0., chord_remove_pct=0., note_change_pct=0.):
+        """
+        Modifies a music21 score by:
+        1. Removing a percentage of melody notes.
+        2. Removing a percentage of harmony chords.
+        3. Shifting a percentage of melody notes by a given number of semitones.
+        
+        Parameters:
+        - score (music21.stream.Score): The input score.
+        - note_remove_pct (float): Percentage of melody notes to remove.
+        - chord_remove_pct (float): Percentage of harmony chords to remove.
+        - note_change_pct (float): Percentage of melody notes to shift.
+        - shift_semitones (int): Number of semitones to shift the notes.
+        
+        Returns:
+        - Modified music21.stream.Score
+        """
+        # Get the first part
+        part = score.parts[0]
+        
+        # Separate notes and chord symbols
+        notes = [n for n in part.notes if isinstance(n, note.Note)]
+        chords = [c for c in part.notes if isinstance(c, harmony.ChordSymbol)]
+        
+        # Remove random notes
+        num_notes_remove = int(len(notes) * note_remove_pct)
+        notes_to_remove = random.sample(notes, num_notes_remove)
+        
+        for note in notes_to_remove:
+            part.remove(note)
+        
+        # Remove random chord symbols
+        num_chords_remove = int(len(chords) * chord_remove_pct)
+        chords_to_remove = random.sample(chords, num_chords_remove)
+        
+        for chord in chords_to_remove:
+            part.remove(chord)
+        
+        # Shift random notes by n semitones
+        num_notes_change = int(len(notes) * note_change_pct/2)
+        notes_to_change = random.sample(notes, num_notes_change)
+        
+        for note in notes_to_change:
+            shift_semitones = np.random.randint(-3,3)
+            note.transpose(shift_semitones, inPlace=True)
+        
+        return score
+    # end randomize_score
+
     def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0, \
-               pad_to_max_length=False, padding_side='right', add_eos_token=True, num_bars=None):
+            pad_to_max_length=False, padding_side='right', add_eos_token=True, \
+            num_bars=None, randomization_rate=0):
         score = converter.parse(file_path)
+        if randomization_rate > 0:
+            score = self.randomize_score(score, randomization_rate,randomization_rate,randomization_rate)
         part = score.parts[0]  # Assume lead sheet
         measures = list(part.getElementsByClass('Measure'))
         harmony_stream = part.flat.getElementsByClass(harmony.ChordSymbol)
@@ -436,7 +489,8 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
     # end fit
 
     def encode(self, file_path, add_start_harmony_token=True, max_length=None, verbose=0,\
-               pad_to_max_length=False, pad_melody=False, padding_side='right', num_bars=None):
+            pad_to_max_length=False, pad_melody=False, padding_side='right', \
+            num_bars=None, randomization_rate=0):
         # first put melody tokens
         if self.verbose > 0:
             print('Processing melody') #TODO Need proper nested if/else
@@ -453,7 +507,8 @@ class MergedMelHarmTokenizer(PreTrainedTokenizer):
         harm_encoded = self.harmony_tokenizer.encode(file_path,\
             add_start_harmony_token=add_start_harmony_token,\
             max_length=None if max_length is None else max_length-len(melody_tokens),\
-            pad_to_max_length=pad_to_max_length, num_bars=num_bars)
+            pad_to_max_length=pad_to_max_length, num_bars=num_bars, \
+            randomization_rate=randomization_rate)
         harmony_tokens = harm_encoded['input_tokens']
         harmony_ids = harm_encoded['input_ids']
         harmony_attention_mask = harm_encoded['attention_mask']

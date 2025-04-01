@@ -75,13 +75,13 @@ def main():
         vocab_size=len(tokenizer.vocab),
         n_positions=512,
         n_layer=8,
-        n_head=16,
+        n_head=8, #16,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
-        resid_pdrop=0.1,
-        embd_pdrop=0.1,
-        attn_pdrop=0.1,
+        resid_pdrop=0.25, #0.1,
+        embd_pdrop=0.25, #0.1,
+        attn_pdrop=0.25, #0.1,
         n_embd=512
     )
 
@@ -191,7 +191,8 @@ def main():
         train_perplexity = 0
         running_token_entropy = 0
         train_token_entropy = 0
-        print('training')
+        train_dataset.randomization_rate = 0.2 * ( (epoch/epochs)**0.5 )
+        print(f'training with randomization_rate: {train_dataset.randomization_rate}')
         with tqdm(trainloader, unit='batch') as tepoch:
             tepoch.set_description(f'Epoch {epoch} | trn')
             for batch in tepoch:
@@ -226,7 +227,7 @@ def main():
                 
                 tepoch.set_postfix(loss=train_loss, accuracy=train_accuracy)
                 step += 1
-                if step%(total_steps//100) == 0 or step == total_steps:
+                if step%(total_steps//epochs) == 0 or step == total_steps:# step%(total_steps//100) == 0 or step == total_steps:
                     best_val_loss, saving_version = validation_loop(
                         epoch,
                         step,
