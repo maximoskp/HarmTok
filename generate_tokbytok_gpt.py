@@ -65,13 +65,13 @@ def main():
         vocab_size=len(tokenizer.vocab),
         n_positions=512,
         n_layer=8,
-        n_head=16,
+        n_head=8,
         pad_token_id=tokenizer.vocab[tokenizer.pad_token],
         bos_token_id=tokenizer.vocab[tokenizer.bos_token],
         eos_token_id=tokenizer.vocab[tokenizer.eos_token],
-        resid_pdrop=0.1,
-        embd_pdrop=0.1,
-        attn_pdrop=0.1,
+        resid_pdrop=0.25,
+        embd_pdrop=0.25,
+        attn_pdrop=0.25,
         n_embd=512
     )
 

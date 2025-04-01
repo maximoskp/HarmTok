@@ -6,7 +6,8 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     GCTSymbolTokenizer, GCTRootTypeTokenizer, MelodyPitchTokenizer, \
     MergedMelHarmTokenizer
 from torch.utils.data import DataLoader
-from transformers import BartForConditionalGeneration, BartConfig, DataCollatorForSeq2Seq
+from transformers import BartForConditionalGeneration, BartConfig, DataCollatorForSeq2Seq,\
+                            LogitsProcessor, StoppingCriteria, StoppingCriteriaList
 import torch
 from torch.optim import AdamW
 from tqdm import tqdm
@@ -103,6 +104,63 @@ def main():
     model.eval()
     model.to(device)
 
+    class BatchExactTokenCountLogitsProcessor(LogitsProcessor):
+        def __init__(self, token_id, eos_token_id, max_counts):
+            """
+            Args:
+                token_id (int): The token to be counted.
+                eos_token_id (int): The end-of-sequence token ID.
+                max_counts (Tensor or list[int]): Per-sequence max counts (batch_size,).
+            """
+            self.token_id = token_id
+            self.eos_token_id = eos_token_id
+            self.max_counts = max_counts # if isinstance(max_counts, list) else max_counts[0].tolist()
+
+        def __call__(self, input_ids, scores):
+            """
+            Modifies logits to:
+            1. Prevent generating `token_id` after its count reaches the limit.
+            2. Prevent `eos_token_id` from being generated before `token_id` appears enough times.
+            """
+            batch_size = input_ids.shape[0]
+            for i in range(batch_size):
+                token_count = (input_ids[i] == self.token_id).sum().item()
+                
+                # Prevent generating token_id after reaching the limit
+                if token_count >= self.max_counts[i]:  
+                    scores[i, self.token_id] -= 1e6
+                
+                # Prevent eos_token_id from appearing too early
+                if token_count < self.max_counts[i]:  
+                    scores[i, self.eos_token_id] -= 1e6
+                    
+            return scores
+    # end BatchExactTokenCountLogitsProcessor
+
+    class BatchExactTokenCountStoppingCriteria(StoppingCriteria):
+        def __init__(self, token_id, max_counts, max_length):
+            """
+            Args:
+                token_id (int): The token to be counted.
+                max_counts (Tensor or list[int]): Per-sequence max counts (batch_size,).
+            """
+            self.token_id = token_id
+            self.max_counts = max_counts # if isinstance(max_counts, list) else max_counts[0].tolist()
+            self.max_length = max_length  # Enforce max_length stopping
+
+        def __call__(self, input_ids, scores, **kwargs):
+            """
+            Stops generation when the token reaches its exact count for all batch elements.
+            """
+            batch_size = input_ids.shape[0]
+            stop_flags = []
+            for i in range(batch_size):
+                token_count = (input_ids[i] == self.token_id).sum().item()
+                length_reached = input_ids.shape[1] >= self.max_length  # Check length limit
+                stop_flags.append(token_count >= self.max_counts[i] or length_reached)
+            return all(stop_flags)  # Stop when all batch sequences meet their condition
+    # end BatchExactTokenCountStoppingCriteria
+
     output_folder = 'tokenized/bart_' + str(temperature) + '/'
 
     os.makedirs(output_folder, exist_ok=True)
@@ -135,12 +193,20 @@ def main():
                         if real_ids[i] != tokenizer.pad_token_id and real_ids[i] >= 0:
                             real_tokens.append( tokenizer.ids_to_tokens[ int(real_ids[i]) ].replace(' ','x') )
                     
+                    # Define the bar token ID, eos_token_id, and per-batch sequence constraints
+                    bar_token_id = tokenizer.vocab['<bar>']
+                    eos_token_id = tokenizer.eos_token_id
+                    bars_count = (batch['input_ids'] == bar_token_id).sum(dim=1).reshape(batch['input_ids'].shape[0],-1)
+                    bars_count = bars_count[0]
+                    
                     outputs = model.generate(
                         input_ids=input_ids.reshape(1, input_ids.shape[0]),
                         eos_token_id=tokenizer.eos_token_id,
                         max_new_tokens=512,
                         do_sample=True,
-                        temperature=temperature
+                        temperature=temperature,
+                        logits_processor=[BatchExactTokenCountLogitsProcessor(bar_token_id, eos_token_id, bars_count)],
+                        stopping_criteria=StoppingCriteriaList([BatchExactTokenCountStoppingCriteria(bar_token_id, bars_count, 512)])
                     )
                     for i in range(1, len(outputs[0]), 1):
                         generated_tokens.append( tokenizer.ids_to_tokens[ int(outputs[0][i]) ].replace(' ','x') )

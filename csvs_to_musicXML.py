@@ -21,10 +21,14 @@ tokenizers = {
 #                     'gpt_reg_0.8','gpt_reg_1.0','gpt_reg_1.2',\
 #                     'bart_reg_0.8','bart_reg_1.0','bart_reg_1.2']
 
-tokenized_folders = ['bart_0.8','bart_1.0','bart_1.2',\
-                    'gpt_0.8','gpt_1.0','gpt_1.2']
+# tokenized_folders = ['bart_0.8','bart_1.0','bart_1.2',\
+#                     'gpt_0.8','gpt_1.0','gpt_1.2',\
+#                     'bart_beam_5', 'gpt_beams_5']
+tokenized_folders = ['bart_beam_5', 'gpt_beam_5']
+# tokenized_folders = ['gpt_beam_5']
 
 tokenizer_names = ['ChordSymbolTokenizer', 'RootTypeTokenizer', 'PitchClassTokenizer', 'RootPCTokenizer']
+# tokenizer_names = ['PitchClassTokenizer']
 
 def process_folder(tok_folder, tokenizer_name):
     melody_tokenizer = MelodyPitchTokenizer.from_pretrained('saved_tokenizers/MelodyPitchTokenizer')

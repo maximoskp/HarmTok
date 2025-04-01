@@ -6,7 +6,8 @@ from harmony_tokenizers_m21 import ChordSymbolTokenizer, RootTypeTokenizer, \
     GCTSymbolTokenizer, GCTRootTypeTokenizer, MelodyPitchTokenizer, \
     MergedMelHarmTokenizer
 from torch.utils.data import DataLoader
-from transformers import BartForConditionalGeneration, BartConfig, DataCollatorForSeq2Seq
+from transformers import BartForConditionalGeneration, BartConfig, DataCollatorForSeq2Seq,\
+                            LogitsProcessor, StoppingCriteria, StoppingCriteriaList
 import torch
 from torch.optim import AdamW
 from tqdm import tqdm
@@ -27,12 +28,13 @@ tokenizers = {
 def main():
 
     # Create the argument parser
-    parser = argparse.ArgumentParser(description='Script for generating token-by-token with GPT2.')
+    parser = argparse.ArgumentParser(description='Script for MLM training a tiny RoBERTa model with a specific harmonic tokenizer.')
 
     # Define arguments
     parser.add_argument('-t', '--tokenizer', type=str, help='Specify the tokenizer name among: ' + repr(tokenizers.keys()), required=True)
     parser.add_argument('-v', '--dataval', type=str, help='Specify the full path to the root folder of the validation xml/mxl files', required=True)
     parser.add_argument('-g', '--gpu', type=int, help='Specify whether and which GPU will be used by used by index. Not using this argument means use CPU.', required=False)
+    parser.add_argument('-s', '--num_beams', type=int, help='Number of beams. Defaults to 5.', required=False)
     parser.add_argument('-b', '--batchsize', type=int, help='Specify batch size. Defaults to 16.', required=False)
     
     # Parse the arguments
@@ -47,6 +49,9 @@ def main():
     batchsize = 16
     if args.batchsize:
         batchsize = args.batchsize
+    num_beams = 5
+    if args.num_beams:
+        num_beams = args.num_beams
 
     melody_tokenizer = MelodyPitchTokenizer.from_pretrained('saved_tokenizers/MelodyPitchTokenizer')
     harmony_tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
@@ -92,72 +97,81 @@ def main():
             device = torch.device(device_name)
         else:
             print('Selected device not available: ' + device_name)
-
+    
     checkpoint = torch.load(model_path, map_location=device_name, weights_only=True)
     model.load_state_dict(checkpoint)
 
     model.eval()
     model.to(device)
 
-    val_loss = 0
-    running_loss = 0
-    batch_num = 0
-    running_accuracy = 0
-    val_accuracy = 0
-    print('validation')
+    output_folder = 'tokenized/bart_beam_' + str(num_beams) + '/'
+
+    os.makedirs(output_folder, exist_ok=True)
+
     tokenized = {
-        'labels': [],
-        'predictions': []
+        'melodies': [],
+        'real': [],
+        'generated': []
     }
-
-    save_dir = 'tok_by_tok/bart/'
-    os.makedirs('tok_by_tok/', exist_ok=True)
-    os.makedirs(save_dir, exist_ok=True)
-
-    result_fields = ['labels', 'predictions']
-    with open( save_dir + tokenizer_name + '.csv', 'w' ) as f:
+    result_fields = ['melody', 'real', 'generated']
+    with open( output_folder + tokenizer_name + '.csv', 'w' ) as f:
         writer = csv.writer(f)
         writer.writerow( result_fields )
     with torch.no_grad():
         with tqdm(valloader, unit='batch') as tepoch:
             tepoch.set_description(f'run')
             for batch in tepoch:
-                input_ids = batch['input_ids'].to(device)
-                attention_mask = batch['attention_mask'].to(device)
-                labels = batch['labels'].to(device)
-                
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs.loss
-                
-                # update loss
-                batch_num += 1
-                running_loss += loss.item()
-                val_loss = running_loss/batch_num
-                # accuracy
-                predictions = outputs.logits.argmax(dim=-1)
-                mask = labels != -100
-                running_accuracy += (predictions[mask] == labels[mask]).sum().item()/mask.sum().item()
-                val_accuracy = running_accuracy/batch_num
+                for bi in range( len(batch['input_ids']) ):
+                    melody_tokens = []
+                    real_tokens = []
+                    generated_tokens = []
+                    # find the start harmony token
+                    # start_harmony_position = np.where( b == tokenizer.vocab[tokenizer.harmony_tokenizer.start_harmony_token] )[0][0]
+                    real_ids = batch['labels'][bi]
+                    input_ids = batch['input_ids'][bi].to(device)
+                    for i in input_ids:
+                        melody_tokens.append( tokenizer.ids_to_tokens[ int(i) ].replace(' ','x') )
 
-                for j in range(len( labels )):
-                    # create tokenized labels
-                    lab_sentence = labels[j]
-                    pred_sentence = predictions[j]
-                    tmp_label_toks = []
-                    tmp_pred_toks = []
-                    for i in range(len( lab_sentence )):
-                        if lab_sentence[i] > 0:
-                            tmp_label_toks.append( tokenizer.ids_to_tokens[ int(lab_sentence[i]) ].replace(' ','x') )
-                            tmp_pred_toks.append( tokenizer.ids_to_tokens[ int(pred_sentence[i]) ].replace(' ','x') )
-                    tokenized['labels'].append( tmp_label_toks )
-                    tokenized['predictions'].append( tmp_pred_toks )
-                    with open( save_dir + tokenizer_name + '.csv', 'a' ) as f:
+                    for i in range(0, len(real_ids), 1):
+                        if real_ids[i] != tokenizer.pad_token_id and real_ids[i] >= 0:
+                            real_tokens.append( tokenizer.ids_to_tokens[ int(real_ids[i]) ].replace(' ','x') )
+                    
+                    # Define the bar token ID, eos_token_id, and per-batch sequence constraints
+                    bar_token_id = tokenizer.vocab['<bar>']
+                    eos_token_id = tokenizer.eos_token_id
+                    bars_count = (batch['input_ids'] == bar_token_id).sum(dim=1).reshape(batch['input_ids'].shape[0],-1)
+                    bars_count = bars_count[0]
+                    
+                    try:
+                        outputs = model.generate(
+                            input_ids=input_ids.reshape(1, input_ids.shape[0]),
+                            eos_token_id=tokenizer.eos_token_id,
+                            max_new_tokens=512,
+                            num_beams=num_beams,
+                        )
+                    except:
+                        outputs = model.generate(
+                            input_ids=input_ids.reshape(1, input_ids.shape[0]),
+                            eos_token_id=tokenizer.eos_token_id,
+                            max_new_tokens=512,
+                            num_beams=2,
+                        )
+                    for i in range(1, len(outputs[0]), 1):
+                        generated_tokens.append( tokenizer.ids_to_tokens[ int(outputs[0][i]) ].replace(' ','x') )
+                    
+
+                    # remove pad from melody tokens
+                    melody_tokens = [i for i in melody_tokens if i != tokenizer.pad_token]
+
+                    with open( output_folder + tokenizer_name + '.csv', 'a' ) as f:
                         writer = csv.writer(f)
-                        writer.writerow( [' '.join(tmp_label_toks), ' '.join(tmp_pred_toks)] )
-                
-                tepoch.set_postfix(loss=val_loss, accuracy=val_accuracy)
+                        writer.writerow( [' '.join(melody_tokens), ' '.join(real_tokens), ' '.join(generated_tokens)] )
+                    
+                    tokenized['melodies'].append( melody_tokens )
+                    tokenized['real'].append( real_tokens )
+                    tokenized['generated'].append( generated_tokens )
     # save all results to csv
-    with open(save_dir + tokenizer_name + '.pickle','wb') as handle:
+    with open(output_folder + tokenizer_name + '.pickle','wb') as handle:
         pickle.dump(tokenized, handle, protocol=pickle.HIGHEST_PROTOCOL)
 # end main
 

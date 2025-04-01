@@ -35,7 +35,7 @@ def main():
     parser.add_argument('-t', '--tokenizer', type=str, help='Specify the tokenizer name among: ' + repr(tokenizers.keys()), required=True)
     parser.add_argument('-v', '--dataval', type=str, help='Specify the full path to the root folder of the validation xml/mxl files', required=True)
     parser.add_argument('-g', '--gpu', type=int, help='Specify whether and which GPU will be used by used by index. Not using this argument means use CPU.', required=False)
-    parser.add_argument('-s', '--temperature', type=float, help='Temperature for sampling. Defaults to 1.0.', required=False)
+    parser.add_argument('-s', '--num_beams', type=int, help='Number of beams. Defaults to 5.', required=False)
     parser.add_argument('-b', '--batchsize', type=int, help='Specify batch size. Defaults to 16.', required=False)
     
     # Parse the arguments
@@ -50,9 +50,9 @@ def main():
     batchsize = 16
     if args.batchsize:
         batchsize = args.batchsize
-    temperature = 1.0
-    if args.temperature:
-        temperature = args.temperature
+    num_beams = 5
+    if args.num_beams:
+        num_beams = args.num_beams
 
     melody_tokenizer = MelodyPitchTokenizer.from_pretrained('saved_tokenizers/MelodyPitchTokenizer')
     harmony_tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
@@ -94,64 +94,7 @@ def main():
     model.eval()
     model.to(device)
 
-    class BatchExactTokenCountLogitsProcessor(LogitsProcessor):
-        def __init__(self, token_id, eos_token_id, max_counts):
-            """
-            Args:
-                token_id (int): The token to be counted.
-                eos_token_id (int): The end-of-sequence token ID.
-                max_counts (Tensor or list[int]): Per-sequence max counts (batch_size,).
-            """
-            self.token_id = token_id
-            self.eos_token_id = eos_token_id
-            self.max_counts = max_counts # if isinstance(max_counts, list) else max_counts[0].tolist()
-
-        def __call__(self, input_ids, scores):
-            """
-            Modifies logits to:
-            1. Prevent generating `token_id` after its count reaches the limit.
-            2. Prevent `eos_token_id` from being generated before `token_id` appears enough times.
-            """
-            batch_size = input_ids.shape[0]
-            for i in range(batch_size):
-                token_count = (input_ids[i] == self.token_id).sum().item()
-                
-                # Prevent generating token_id after reaching the limit
-                if token_count >= self.max_counts[i]:  
-                    scores[i, self.token_id] -= 1e6
-                
-                # Prevent eos_token_id from appearing too early
-                if token_count < self.max_counts[i]:  
-                    scores[i, self.eos_token_id] -= 1e6
-                    
-            return scores
-    # end BatchExactTokenCountLogitsProcessor
-
-    class BatchExactTokenCountStoppingCriteria(StoppingCriteria):
-        def __init__(self, token_id, max_counts, max_length):
-            """
-            Args:
-                token_id (int): The token to be counted.
-                max_counts (Tensor or list[int]): Per-sequence max counts (batch_size,).
-            """
-            self.token_id = token_id
-            self.max_counts = max_counts # if isinstance(max_counts, list) else max_counts[0].tolist()
-            self.max_length = max_length  # Enforce max_length stopping
-        
-        def __call__(self, input_ids, scores, **kwargs):
-            """
-            Stops generation when the token reaches its exact count for all batch elements.
-            """
-            batch_size = input_ids.shape[0]
-            stop_flags = []
-            for i in range(batch_size):
-                token_count = (input_ids[i] == self.token_id).sum().item()
-                length_reached = input_ids.shape[1] >= self.max_length  # Check length limit
-                stop_flags.append(token_count >= self.max_counts[i] or length_reached)
-            return all(stop_flags)  # Stop when all batch sequences meet their condition
-    # end BatchExactTokenCountStoppingCriteria
-
-    output_folder = 'tokenized/gpt_' + str(temperature) + '/'
+    output_folder = 'tokenized/gpt_beam_' + str(num_beams) + '/'
 
     os.makedirs(output_folder, exist_ok=True)
 
@@ -189,15 +132,21 @@ def main():
                     bars_count = (batch['input_ids'] == bar_token_id).sum(dim=1).reshape(batch['input_ids'].shape[0],-1)
                     bars_count = bars_count[0]
 
-                    outputs = model.generate(
-                        input_ids=input_ids.reshape(1, input_ids.shape[0]),
-                        eos_token_id=tokenizer.eos_token_id,
-                        max_new_tokens=512,
-                        do_sample=True,
-                        temperature=temperature,
-                        logits_processor=[BatchExactTokenCountLogitsProcessor(bar_token_id, eos_token_id, bars_count)],
-                        stopping_criteria=StoppingCriteriaList([BatchExactTokenCountStoppingCriteria(bar_token_id, bars_count, 512)])
-                    )
+                    try:
+                        outputs = model.generate(
+                            input_ids=input_ids.reshape(1, input_ids.shape[0]),
+                            eos_token_id=tokenizer.eos_token_id,
+                            max_new_tokens=512,
+                            num_beams=num_beams,
+                        )
+                    except:
+                        print('exception: ', input_ids)
+                        outputs = model.generate(
+                            input_ids=input_ids.reshape(1, input_ids.shape[0]),
+                            eos_token_id=tokenizer.eos_token_id,
+                            max_new_tokens=512,
+                            num_beams=2,
+                        )
                     for i in range(start_harmony_position, len(outputs[0]), 1):
                         generated_tokens.append( tokenizer.ids_to_tokens[ int(outputs[0][i]) ].replace(' ','x') )
                     
