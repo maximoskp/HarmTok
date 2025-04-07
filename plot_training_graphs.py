@@ -6,7 +6,7 @@ import os
 save_path = 'results/figs/'
 os.makedirs(save_path, exist_ok=True)
 
-models = ['bart', 'gpt', 'bart_reg', 'gpt_reg', 'mlm']
+models = ['bart', 'gpt', 'mlm']
 
 # List of CSV files
 csv_files = ["ChordSymbolTokenizer.csv", "RootTypeTokenizer.csv", \

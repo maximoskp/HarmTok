@@ -36,6 +36,7 @@ def main():
     parser.add_argument('-v', '--dataval', type=str, help='Specify the full path to the root folder of the validation xml/mxl files', required=True)
     parser.add_argument('-g', '--gpu', type=int, help='Specify whether and which GPU will be used by used by index. Not using this argument means use CPU.', required=False)
     parser.add_argument('-s', '--num_beams', type=int, help='Number of beams. Defaults to 5.', required=False)
+    parser.add_argument('-p', '--temperature', type=float, help='Temperature, defaults to 0, i.e., no sampling.', required=False)
     parser.add_argument('-b', '--batchsize', type=int, help='Specify batch size. Defaults to 16.', required=False)
     
     # Parse the arguments
@@ -53,6 +54,9 @@ def main():
     num_beams = 5
     if args.num_beams:
         num_beams = args.num_beams
+    temperature = 0.0
+    if args.temperature:
+        temperature = args.temperature
 
     melody_tokenizer = MelodyPitchTokenizer.from_pretrained('saved_tokenizers/MelodyPitchTokenizer')
     harmony_tokenizer = tokenizers[tokenizer_name].from_pretrained('saved_tokenizers/' + tokenizer_name)
@@ -94,7 +98,7 @@ def main():
     model.eval()
     model.to(device)
 
-    output_folder = 'tokenized/gpt_beam_' + str(num_beams) + '/'
+    output_folder = 'tokenized/gpt_beam_' + str(num_beams) + '_temp_' + str(temperature).replace('.','x') + '/'
 
     os.makedirs(output_folder, exist_ok=True)
 
@@ -132,21 +136,16 @@ def main():
                     bars_count = (batch['input_ids'] == bar_token_id).sum(dim=1).reshape(batch['input_ids'].shape[0],-1)
                     bars_count = bars_count[0]
 
-                    try:
-                        outputs = model.generate(
-                            input_ids=input_ids.reshape(1, input_ids.shape[0]),
-                            eos_token_id=tokenizer.eos_token_id,
-                            max_new_tokens=512,
-                            num_beams=num_beams,
-                        )
-                    except:
-                        print('exception: ', input_ids)
-                        outputs = model.generate(
-                            input_ids=input_ids.reshape(1, input_ids.shape[0]),
-                            eos_token_id=tokenizer.eos_token_id,
-                            max_new_tokens=512,
-                            num_beams=2,
-                        )
+                    do_sample = temperature > 0
+
+                    outputs = model.generate(
+                        input_ids=input_ids.reshape(1, input_ids.shape[0]),
+                        eos_token_id=tokenizer.eos_token_id,
+                        max_length=model.config.max_position_embeddings,
+                        num_beams=num_beams,
+                        do_sample=do_sample,
+                        temperature=1 if not do_sample else temperature
+                    )
                     for i in range(start_harmony_position, len(outputs[0]), 1):
                         generated_tokens.append( tokenizer.ids_to_tokens[ int(outputs[0][i]) ].replace(' ','x') )
                     

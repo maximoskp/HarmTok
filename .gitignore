@@ -1,5 +1,6 @@
 data/
 saved_models/
+old_models/
 old/
 tokenized/
 tok_by_tok/
